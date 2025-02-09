@@ -86,6 +86,64 @@ def add_csrf_token(response):
         response.set_cookie('csrf_token', generate_csrf())
     return response
 
+# Fonctions et filtres
+def enumerate_filter(iterable, start=0):
+    return enumerate(iterable, start=start)
+
+def from_json_filter(value):
+    if value is None:
+        return None
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return value
+
+def get_file_icon(filename):
+    """Retourne l'icône Font Awesome appropriée selon le type de fichier."""
+    ext = filename.lower().split('.')[-1] if '.' in filename else ''
+    
+    icons = {
+        'pdf': 'fa-file-pdf',
+        'doc': 'fa-file-word',
+        'docx': 'fa-file-word',
+        'xls': 'fa-file-excel',
+        'xlsx': 'fa-file-excel',
+        'ppt': 'fa-file-powerpoint',
+        'pptx': 'fa-file-powerpoint',
+        'txt': 'fa-file-alt',
+        'jpg': 'fa-file-image',
+        'jpeg': 'fa-file-image',
+        'png': 'fa-file-image',
+        'gif': 'fa-file-image',
+        'zip': 'fa-file-archive',
+        'rar': 'fa-file-archive',
+        '7z': 'fa-file-archive'
+    }
+    
+    return icons.get(ext, 'fa-file')
+
+# Ajouter les filtres à l'environnement Jinja2
+app.jinja_env.filters['enumerate'] = enumerate_filter
+app.jinja_env.filters['from_json'] = from_json_filter
+app.jinja_env.filters['get_file_icon'] = get_file_icon
+
+def init_admin():
+    """Initialise le compte administrateur s'il n'existe pas"""
+    admin = User.query.filter_by(email='admin@example.com').first()
+    if not admin:
+        # Créer l'administrateur
+        admin = User(
+            username='admin',
+            name='Admin',
+            email='admin@example.com',
+            role='admin'
+        )
+        admin.set_password('admin')
+        db.session.add(admin)
+        db.session.commit()
+        print('Compte administrateur créé avec succès.')
+
+# Routes
 @app.route('/')
 @login_required
 def index():
@@ -1981,51 +2039,6 @@ def download_course_file(course_id, file_id):
     
     uploads_dir = os.path.join(app.root_path, 'uploads')
     return send_from_directory(uploads_dir, file.filename, as_attachment=True, download_name=file.original_filename)
-
-def enumerate_filter(iterable, start=0):
-    return enumerate(iterable, start=start)
-
-def from_json_filter(value):
-    if value is None:
-        return None
-    try:
-        return json.loads(value)
-    except (json.JSONDecodeError, TypeError):
-        return value
-
-# Ajouter les filtres à l'environnement Jinja2
-app.jinja_env.filters['enumerate'] = enumerate_filter
-app.jinja_env.filters['from_json'] = from_json_filter
-
-def get_file_icon(filename):
-    """Retourne l'icône Font Awesome appropriée selon le type de fichier."""
-    ext = filename.lower().split('.')[-1] if '.' in filename else ''
-    
-    icons = {
-        'pdf': 'fa-file-pdf',
-        'doc': 'fa-file-word',
-        'docx': 'fa-file-word',
-        'xls': 'fa-file-excel',
-        'xlsx': 'fa-file-excel',
-        'ppt': 'fa-file-powerpoint',
-        'pptx': 'fa-file-powerpoint',
-        'txt': 'fa-file-alt',
-        'jpg': 'fa-file-image',
-        'jpeg': 'fa-file-image',
-        'png': 'fa-file-image',
-        'gif': 'fa-file-image',
-        'zip': 'fa-file-archive',
-        'rar': 'fa-file-archive',
-        '7z': 'fa-file-archive'
-    }
-    
-    return icons.get(ext, 'fa-file')
-
-app.jinja_env.filters['get_file_icon'] = get_file_icon
-
-# Initialise le compte administrateur s'il n'existe pas
-def init_admin():
-           
 
 if __name__ == '__main__':
     with app.app_context():
