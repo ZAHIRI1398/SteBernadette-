@@ -2012,6 +2012,32 @@ def init_admin():
         db.session.add(admin)
         db.session.commit()
         print('Compte administrateur créé avec succès.')
+def get_file_icon(filename):
+    """Retourne l'icône Font Awesome appropriée selon le type de fichier."""
+    ext = filename.lower().split('.')[-1] if '.' in filename else ''
+    
+    icons = {
+        'pdf': 'fa-file-pdf',
+        'doc': 'fa-file-word',
+        'docx': 'fa-file-word',
+        'xls': 'fa-file-excel',
+        'xlsx': 'fa-file-excel',
+        'ppt': 'fa-file-powerpoint',
+        'pptx': 'fa-file-powerpoint',
+        'txt': 'fa-file-alt',
+        'jpg': 'fa-file-image',
+        'jpeg': 'fa-file-image',
+        'png': 'fa-file-image',
+        'gif': 'fa-file-image',
+        'zip': 'fa-file-archive',
+        'rar': 'fa-file-archive',
+        '7z': 'fa-file-archive'
+    }
+    
+    return icons.get(ext, 'fa-file')
+
+# Ajouter le filtre à l'environnement Jinja2
+app.jinja_env.filters['get_file_icon'] = get_file_icon        
 
 if __name__ == '__main__':
     with app.app_context():
