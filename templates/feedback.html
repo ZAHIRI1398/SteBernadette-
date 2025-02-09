@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Retour sur l'exercice - {{ exercise.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Accueil</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('view_exercise', exercise_id=exercise.id) }}">{{ exercise.title }}</a></li>
+            <li class="breadcrumb-item active">Retour</li>
+        </ol>
+    </nav>
+
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h2 class="card-title mb-0">Retour sur l'exercice : {{ exercise.title }}</h2>
+        </div>
+        <div class="card-body">
+            <!-- Informations sur la tentative -->
+            <div class="mb-4">
+                <h4>Informations sur la tentative</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Date de soumission :</strong> {{ attempt.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                        <p><strong>Score :</strong> {{ attempt.score }}%</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Réponses et corrections -->
+            <div class="mb-4">
+                <h4>Réponses et corrections</h4>
+                {% if exercise.exercise_type == 'qcm' %}
+                    {% for question_num, answer in answers.items() %}
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title">Question {{ question_num }}</h5>
+                            <p><strong>Votre réponse :</strong> {{ answer }}</p>
+                            {% if feedback and feedback.get(question_num) %}
+                            <div class="alert {{ 'alert-success' if feedback[question_num]['correct'] else 'alert-danger' }}">
+                                <p><strong>{{ 'Correct' if feedback[question_num]['correct'] else 'Incorrect' }}</strong></p>
+                                {% if feedback[question_num].get('explanation') %}
+                                <p>{{ feedback[question_num]['explanation'] }}</p>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% elif exercise.exercise_type == 'drag_and_drop' %}
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title">Vos réponses</h5>
+                            {% for zone, word in answers.items() %}
+                            <div class="mb-2">
+                                <strong>Zone {{ zone }} :</strong> {{ word }}
+                                {% if feedback and feedback.get(zone) %}
+                                <div class="alert {{ 'alert-success' if feedback[zone]['correct'] else 'alert-danger' }} mt-2">
+                                    <p><strong>{{ 'Correct' if feedback[zone]['correct'] else 'Incorrect' }}</strong></p>
+                                    {% if feedback[zone].get('expected') %}
+                                    <p>Réponse attendue : {{ feedback[zone]['expected'] }}</p>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% elif exercise.exercise_type == 'text' %}
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title">Votre réponse</h5>
+                            <p class="card-text">{{ answers }}</p>
+                            {% if feedback %}
+                            <div class="alert {{ 'alert-success' if attempt.score >= 70 else 'alert-warning' }}">
+                                <h6>Commentaires de l'enseignant :</h6>
+                                <p>{{ feedback }}</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% elif exercise.exercise_type == 'file' %}
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title">Fichier soumis</h5>
+                            <p><strong>Nom du fichier :</strong> {{ answers }}</p>
+                            {% if feedback %}
+                            <div class="alert {{ 'alert-success' if attempt.score >= 70 else 'alert-warning' }}">
+                                <h6>Commentaires de l'enseignant :</h6>
+                                <p>{{ feedback }}</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Boutons d'action -->
+            <div class="d-flex justify-content-between">
+                <a href="{{ url_for('view_exercise', exercise_id=exercise.id) }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Retour à l'exercice
+                </a>
+                {% if attempt.score < 70 %}
+                <a href="{{ url_for('submit_exercise', exercise_id=exercise.id) }}" class="btn btn-primary">
+                    <i class="fas fa-redo"></i> Réessayer
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

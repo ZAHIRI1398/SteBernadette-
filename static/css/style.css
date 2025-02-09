@@ -1,0 +1,342 @@
+body {
+    background-color: #f8f9fa;
+}
+
+.navbar {
+    box-shadow: 0 2px 4px rgba(0,0,0,.1);
+}
+
+.card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,.1);
+    transition: transform 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+.btn-primary {
+    padding: 10px 20px;
+    border-radius: 5px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 15px;
+}
+
+h1 {
+    color: #333;
+    font-weight: 600;
+}
+
+.text-muted {
+    font-size: 1.1rem;
+}
+
+/* Styles pour les exercices */
+.exercise-content {
+    margin-top: 1rem;
+}
+
+/* Text holes */
+.text-holes-form input[type="text"] {
+    width: 120px;
+    display: inline-block;
+    margin: 0 0.5rem;
+}
+
+.word-bank {
+    min-height: 50px;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+/* Word placement */
+.draggable-word {
+    cursor: move;
+    user-select: none;
+}
+
+.category-drop {
+    min-height: 100px;
+    border: 2px dashed #ccc;
+    border-radius: 5px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.category-drop.drag-over {
+    background-color: #f8f9fa;
+    border-color: #0d6efd;
+}
+
+.draggable-word.dragging {
+    opacity: 0.5;
+}
+
+.draggable-word.placed {
+    cursor: not-allowed;
+}
+
+/* Flashcards */
+.flashcard {
+    perspective: 1000px;
+    margin-bottom: 20px;
+    height: 400px;
+}
+
+.flashcard-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+    cursor: pointer;
+}
+
+.flashcard.flipped .flashcard-inner {
+    transform: rotateY(180deg);
+}
+
+.flashcard-front, .flashcard-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.flashcard-back {
+    transform: rotateY(180deg);
+    background-color: #f8f9fa;
+}
+
+.flashcard img {
+    max-width: 100%;
+    max-height: 250px;
+    object-fit: contain;
+    margin-bottom: 1rem;
+}
+
+.answer-input {
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.verify-btn {
+    margin-top: 1rem;
+}
+
+.feedback {
+    margin-top: 1rem;
+    padding: 0.5rem;
+    border-radius: 4px;
+}
+
+.feedback.correct {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.feedback.incorrect {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.question-text, .answer-text {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+/* Pairs Exercise */
+.pairs-exercise {
+    position: relative;
+}
+
+.pair-item {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.pair-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.pair-item.selected {
+    border-color: #007bff;
+    background-color: #f8f9fa;
+}
+
+.pair-item.correct {
+    border-color: #28a745;
+    background-color: #d4edda;
+}
+
+.pair-item.incorrect {
+    border-color: #dc3545;
+    background-color: #f8d7da;
+}
+
+.connection-lines {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.connection-line {
+    position: absolute;
+    height: 2px;
+    background-color: #007bff;
+    transform-origin: left center;
+    pointer-events: none;
+}
+
+.connection-line.correct {
+    background-color: #28a745;
+}
+
+.connection-line.incorrect {
+    background-color: #dc3545;
+}
+
+.pair-item img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.left-items, .right-items {
+    min-height: 200px;
+}
+
+/* Styles pour le formulaire de création d'exercice */
+.card {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.flashcard-item, .pair-item {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+}
+
+.flashcard-item:hover, .pair-item:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.form-label {
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.form-control {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 0.5rem;
+    transition: border-color 0.15s ease-in-out;
+}
+
+.form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+input[type="file"].form-control {
+    padding: 0.375rem 0.75rem;
+    background-color: #f8f9fa;
+    border: 1px dashed #ced4da;
+    cursor: pointer;
+}
+
+input[type="file"].form-control:hover {
+    background-color: #e9ecef;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+    border-color: #545b62;
+}
+
+.btn-danger.btn-sm {
+    font-size: 0.875rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.btn i {
+    margin-right: 0.5rem;
+}
+
+/* Styles pour les aperçus d'images */
+.image-preview {
+    max-width: 100%;
+    max-height: 200px;
+    margin-top: 0.5rem;
+    border-radius: 4px;
+    display: none;
+}
+
+.image-preview.show {
+    display: block;
+}
+
+/* Animation pour l'ajout/suppression de cartes */
+.flashcard-item, .pair-item {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Styles pour le conteneur des cartes */
+#flashcards_container, #pairs_container {
+    margin-bottom: 1rem;
+}
+
+/* Style pour les boutons d'ajout */
+.btn-add {
+    width: 100%;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 2px dashed #dee2e6;
+    background-color: #f8f9fa;
+    color: #6c757d;
+    transition: all 0.3s ease;
+}
+
+.btn-add:hover {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+}

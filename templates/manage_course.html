@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gérer le cours - {{ course.title }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-primary">
+        <div class="container">
+            <a class="navbar-brand text-white" href="{{ url_for('home') }}">Classe Numérique</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="{{ url_for('teacher_dashboard') }}">
+                            <i class="bi bi-arrow-left"></i> Retour au tableau de bord
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <span class="nav-link text-white">{{ current_user.name }}</span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="{{ url_for('logout') }}">Déconnexion</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h2>{{ course.title }}</h2>
+                        <p class="text-muted">
+                            Matière: {{ course.subject }}<br>
+                            Classe: {{ course.class_ref.name }}
+                        </p>
+                        {% with messages = get_flashed_messages() %}
+                            {% if messages %}
+                                {% for message in messages %}
+                                    <div class="alert alert-info alert-dismissible fade show" role="alert">
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12 mb-4">
+                <a href="{{ url_for('create_exercise', course_id=course.id) }}" class="btn btn-primary">
+                    <i class="bi bi-plus-lg"></i> Créer un exercice
+                </a>
+            </div>
+
+            {% for exercise in course.exercises %}
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="card-title">{{ exercise.title }}</h5>
+                            <div class="btn-group">
+                                <a href="{{ url_for('exercise_stats', exercise_id=exercise.id) }}" 
+                                   class="btn btn-outline-info"
+                                   title="Voir les statistiques">
+                                    <i class="bi bi-graph-up"></i>
+                                </a>
+                                <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-sm btn-primary me-2">
+                                    <i class="bi bi-pencil"></i> Modifier
+                                </a>
+                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteExerciseModal{{ exercise.id }}">
+                                    <i class="bi bi-trash"></i> Supprimer
+                                </button>
+                            </div>
+                        </div>
+
+                        <span class="badge bg-secondary mb-2">{{ exercise.type }}</span>
+
+                        {% if exercise.type == 'text_holes' %}
+                        <div class="exercise-preview">
+                            <p>
+                                {% set words = exercise.content.text.split('[...]') %}
+                                {% for part in words %}
+                                    {{ part }}
+                                    {% if not loop.last %}
+                                    <span class="badge bg-primary">___</span>
+                                    {% endif %}
+                                {% endfor %}
+                            </p>
+                            <div class="word-bank mt-2">
+                                {% for word in exercise.content.words %}
+                                <span class="badge bg-light text-dark border me-1">{{ word }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% elif exercise.type == 'word_placement' %}
+                        <div class="exercise-preview">
+                            <p>{{ exercise.content.text }}</p>
+                            <div class="word-bank mt-2">
+                                {% for word in exercise.content.words %}
+                                <span class="badge bg-light text-dark border me-1">{{ word }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% elif exercise.type == 'flashcards' %}
+                        <div class="exercise-preview">
+                            <p class="mb-1">Nombre de cartes: {{ exercise.content|length }}</p>
+                            {% if exercise.content %}
+                            <div class="flashcard-preview">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <p class="mb-0"><strong>Question:</strong> {{ exercise.content[0].question }}</p>
+                                        <p class="mb-0"><strong>Réponse:</strong> {{ exercise.content[0].answer }}</p>
+                                    </div>
+                                </div>
+                                {% if exercise.content|length > 1 %}
+                                <p class="text-muted mt-2">+ {{ exercise.content|length - 1 }} autres cartes</p>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% elif exercise.type == 'pairs' %}
+                        <div class="exercise-preview">
+                            <p class="mb-1">Nombre de paires: {{ exercise.content.pairs|length }}</p>
+                            {% if exercise.content.pairs %}
+                            <div class="pairs-preview">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <p class="mb-0">{{ exercise.content.pairs[0].left }}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <p class="mb-0">{{ exercise.content.pairs[0].right }}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% if exercise.content.pairs|length > 1 %}
+                                <p class="text-muted mt-2">+ {{ exercise.content.pairs|length - 1 }} autres paires</p>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <div class="exercise-actions mt-3">
+                            <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-sm btn-outline-primary me-2">
+                                <i class="bi bi-pencil"></i> Modifier
+                            </a>
+                            <form action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}" method="POST" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Êtes-vous sûr de vouloir supprimer cet exercice ?')">
+                                    <i class="bi bi-trash"></i> Supprimer
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Suppression Exercice -->
+            <div class="modal fade" id="deleteExerciseModal{{ exercise.id }}" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Confirmer la suppression</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Êtes-vous sûr de vouloir supprimer l'exercice "{{ exercise.title }}" ?</p>
+                            <p class="text-danger"><small>Cette action est irréversible.</small></p>
+                        </div>
+                        <div class="modal-footer">
+                            <form action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}" method="POST">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                                <button type="submit" class="btn btn-danger">Supprimer</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

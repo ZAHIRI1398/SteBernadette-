@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}{{ class_obj.name }} - Classe{% endblock %}
+
+{% block content %}
+<div class="container">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('teacher_dashboard') }}">Tableau de bord</a></li>
+            <li class="breadcrumb-item active">{{ class_obj.name }}</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Informations de la classe -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">{{ class_obj.name }}</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Liste des élèves</h6>
+                    {% if class_obj.students %}
+                        <div class="list-group">
+                            {% for student in class_obj.students %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0">{{ student.name }}</h6>
+                                    <small class="text-muted">{{ student.email }}</small>
+                                </div>
+                                <button type="button" class="btn btn-outline-danger btn-sm" 
+                                        onclick="confirmRemoveStudent({{ student.id }}, '{{ student.name }}')">
+                                    <i class="bi bi-person-x"></i>
+                                </button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-center text-muted">
+                            Aucun élève inscrit dans cette classe.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Liste des cours -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Cours</h5>
+                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createCourseModal">
+                        <i class="bi bi-plus-circle"></i> Nouveau cours
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if class_obj.courses %}
+                        <div class="list-group">
+                            {% for course in class_obj.courses %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0">{{ course.title }}</h6>
+                                    <small class="text-muted">{{ course.exercises|length }} exercices</small>
+                                </div>
+                                <div class="btn-group">
+                                    <a href="#" class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                            onclick="confirmDeleteCourse({{ course.id }}, '{{ course.title }}')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-center text-muted">
+                            Aucun cours créé pour cette classe.
+                            <br>
+                            Cliquez sur "Nouveau cours" pour commencer.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistiques -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Statistiques</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6>Nombre d'élèves</h6>
+                        <p class="h3">{{ class_obj.students|length }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6>Nombre de cours</h6>
+                        <p class="h3">{{ class_obj.courses|length }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6>Total des exercices</h6>
+                        <p class="h3">{{ class_obj.courses|map(attribute='exercises')|map('length')|sum }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Création de cours -->
+<div class="modal fade" id="createCourseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nouveau cours</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('create_course', class_id=class_obj.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="courseTitle" class="form-label">Titre du cours</label>
+                        <input type="text" class="form-control" id="courseTitle" name="title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="courseDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="courseDescription" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-primary">Créer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Formulaires cachés -->
+<form id="removeCourseForm" method="POST" style="display: none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+
+<form id="removeStudentForm" method="POST" style="display: none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+
+{% block extra_js %}
+<script>
+function confirmDeleteCourse(courseId, courseTitle) {
+    if (confirm(`Êtes-vous sûr de vouloir supprimer le cours "${courseTitle}" ?`)) {
+        const form = document.getElementById('removeCourseForm');
+        form.action = `{{ url_for('delete_course', course_id=0) }}`.replace('0', courseId);
+        form.submit();
+    }
+}
+
+function confirmRemoveStudent(studentId, studentName) {
+    if (confirm(`Êtes-vous sûr de vouloir retirer l'élève "${studentName}" de la classe ?`)) {
+        const form = document.getElementById('removeStudentForm');
+        form.action = `{{ url_for('remove_student', class_id=class_obj.id, student_id=0) }}`.replace('0', studentId);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}
+
+{% endblock %}

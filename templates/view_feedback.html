@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Résultat de l'exercice</h2>
+    
+    {% set feedback_data = attempt.feedback|from_json %}
+    
+    <div class="card mb-4">
+        <div class="card-body">
+            <h4>Score : {{ "%.1f"|format(attempt.score) }}%</h4>
+            {% if exercise.exercise_type == 'pairs' %}
+                <div class="mt-4">
+                    <h5>Détail des associations :</h5>
+                    {% for pair in feedback_data.pairs %}
+                        <div class="card mb-3 {% if pair.is_correct %}border-success{% else %}border-danger{% endif %}">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-5">
+                                        <strong>Élément :</strong> {{ pair.left }}
+                                    </div>
+                                    <div class="col-md-5">
+                                        <strong>Votre réponse :</strong> {{ pair.right }}
+                                    </div>
+                                    <div class="col-md-2">
+                                        {% if pair.is_correct %}
+                                            <span class="text-success">✓ Correct</span>
+                                        {% else %}
+                                            <span class="text-danger">✗ Incorrect</span>
+                                            <div class="mt-2">
+                                                <small class="text-muted">Réponse correcte : {{ pair.correct_right }}</small>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="text-center mt-4">
+        <a href="{{ url_for('view_exercise', exercise_id=exercise.id) }}" class="btn btn-primary">Réessayer l'exercice</a>
+        <a href="{{ url_for('view_course', course_id=course.id) }}" class="btn btn-secondary">Retour au cours</a>
+    </div>
+</div>
+{% endblock %}

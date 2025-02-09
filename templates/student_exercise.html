@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}{{ exercise.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('view_student_classes') }}">Mes Classes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('view_class', class_id=class_obj.id) }}">{{ class_obj.name }}</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('view_course', course_id=course.id) }}">{{ course.name }}</a></li>
+            <li class="breadcrumb-item active">{{ exercise.title }}</li>
+        </ol>
+    </nav>
+
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title mb-0">{{ exercise.title }}</h2>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <strong>Matière :</strong> {{ exercise.subject }}
+                </div>
+                <div class="col-md-4">
+                    <strong>Niveau :</strong> {{ exercise.level }}
+                </div>
+                <div class="col-md-4">
+                    <strong>Type :</strong> {{ exercise.type }}
+                </div>
+            </div>
+
+            <div class="exercise-content">
+                <h4>Question :</h4>
+                <p>{{ exercise.content.question }}</p>
+
+                <form action="{{ url_for('submit_answer', exercise_id=exercise.id) }}" method="POST" id="exerciseForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="course_id" value="{{ course.id }}">
+                    
+                    {% if exercise.type == 'qcm' %}
+                        <h4>Options :</h4>
+                        <div class="options">
+                            {% for option in exercise.content.options %}
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="answer" 
+                                       id="option{{ loop.index }}" value="{{ loop.index0 }}" required>
+                                <label class="form-check-label" for="option{{ loop.index }}">
+                                    {{ option }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-paper-plane"></i> Soumettre ma réponse
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

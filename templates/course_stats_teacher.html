@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Statistiques du cours : {{ course.title }}</h2>
+    
+    <!-- Vue d'ensemble -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Vue d'ensemble</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h5>Élèves total</h5>
+                        <h2 class="text-primary">{{ stats.total_students }}</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h5>Élèves actifs</h5>
+                        <h2 class="text-success">{{ stats.active_students }}</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h5>Note moyenne</h5>
+                        <h2 class="text-info">{{ "%.1f"|format(stats.average_score) }}%</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h5>Taux de participation</h5>
+                        <h2 class="text-warning">{{ "%.1f"|format(stats.active_students / stats.total_students * 100) }}%</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Statistiques par exercice -->
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <h4 class="mb-0">Détails par exercice</h4>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Exercice</th>
+                            <th>Tentatives</th>
+                            <th>Élèves complétés</th>
+                            <th>Note moyenne</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for exercise_id, exercise_stats in stats.exercise_completion.items() %}
+                        <tr>
+                            <td>{{ exercise_stats.title }}</td>
+                            <td>{{ exercise_stats.attempts }}</td>
+                            <td>{{ exercise_stats.students_completed }} / {{ stats.total_students }}</td>
+                            <td>{{ "%.1f"|format(exercise_stats.average_score) }}%</td>
+                            <td>
+                                <a href="{{ url_for('exercise_stats', exercise_id=exercise_id, course_id=course.id) }}" 
+                                   class="btn btn-sm btn-info">
+                                    <i class="fas fa-chart-bar"></i> Détails
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

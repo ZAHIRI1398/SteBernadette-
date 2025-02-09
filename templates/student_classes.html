@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Mes Classes{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Mes Classes</h2>
+
+    <!-- Formulaire pour rejoindre une classe -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Rejoindre une classe</h5>
+            <form action="{{ url_for('join_class_by_code') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="input-group">
+                    <input type="text" class="form-control" name="class_code" placeholder="Code de la classe" required>
+                    <button type="submit" class="btn btn-primary">Rejoindre</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Liste des classes -->
+    <div class="row">
+        {% for class in classes %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">{{ class.name }}</h5>
+                    <p class="card-text">{{ class.description }}</p>
+                    <div class="mb-2">
+                        <span class="badge bg-primary">{{ class.subject }}</span>
+                        <span class="badge bg-secondary">{{ class.level }}</span>
+                    </div>
+                    <p class="card-text">
+                        <small class="text-muted">
+                            Enseignant: {{ class.teacher.name }}
+                        </small>
+                    </p>
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('view_class', class_id=class.id) }}" class="btn btn-primary">Voir la classe</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not classes %}
+        <div class="col-12">
+            <div class="alert alert-info">
+                Vous n'êtes inscrit à aucune classe pour le moment.
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

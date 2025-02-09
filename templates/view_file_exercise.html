@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+.exercise-container {
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 20px;
+}
+
+.exercise-title {
+    font-size: 1.8rem;
+    color: #333;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.instructions-container {
+    background-color: #f8f9fa;
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 30px;
+}
+
+.instructions-title {
+    font-size: 1.2rem;
+    color: #333;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+
+.instructions-text {
+    font-size: 1.1rem;
+    color: #495057;
+    white-space: pre-wrap;
+    line-height: 1.6;
+}
+
+.file-requirements {
+    background-color: #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.requirements-title {
+    font-size: 1.1rem;
+    color: #333;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+
+.requirements-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.requirements-list li {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    color: #495057;
+}
+
+.requirements-list li i {
+    margin-right: 10px;
+    color: #6f42c1;
+}
+
+.upload-container {
+    border: 2px dashed #6f42c1;
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    background-color: #f3f0ff;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.upload-container:hover {
+    background-color: #e9ecef;
+}
+
+.upload-icon {
+    font-size: 48px;
+    color: #6f42c1;
+    margin-bottom: 15px;
+}
+
+.upload-text {
+    font-size: 1.2rem;
+    color: #495057;
+    margin-bottom: 10px;
+}
+
+.upload-subtext {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.file-input {
+    display: none;
+}
+
+.selected-file {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: none;
+}
+
+.selected-file.visible {
+    display: block;
+}
+
+.file-name {
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.file-size {
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.submit-button {
+    display: block;
+    width: 100%;
+    margin-top: 30px;
+    padding: 15px;
+    font-size: 1.2rem;
+    background-color: #6f42c1;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.submit-button:hover {
+    background-color: #5a32a3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.submit-button:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.previous-submissions {
+    margin-top: 40px;
+}
+
+.submission-card {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.submission-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.submission-date {
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.submission-status {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.status-pending {
+    background-color: #ffc107;
+    color: #856404;
+}
+
+.status-graded {
+    background-color: #28a745;
+    color: white;
+}
+
+.submission-file {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+}
+
+.submission-file i {
+    margin-right: 10px;
+    color: #6f42c1;
+}
+
+.submission-grade {
+    margin-top: 15px;
+    font-weight: bold;
+    color: #333;
+}
+
+.submission-feedback {
+    margin-top: 10px;
+    color: #495057;
+    font-style: italic;
+}
+</style>
+
+<div class="exercise-container">
+    <h3 class="exercise-title">{{ exercise.title }}</h3>
+    
+    {% set content = exercise.get_content() %}
+    <div class="instructions-container">
+        <div class="instructions-title">Instructions</div>
+        <div class="instructions-text">{{ content.instructions }}</div>
+        
+        <div class="file-requirements">
+            <div class="requirements-title">Exigences du fichier :</div>
+            <ul class="requirements-list">
+                <li>
+                    <i class="fas fa-file"></i>
+                    Types de fichiers acceptés : {{ content.allowed_extensions|join(', ')|upper }}
+                </li>
+                <li>
+                    <i class="fas fa-weight"></i>
+                    Taille maximale : {{ content.max_file_size }} Mo
+                </li>
+            </ul>
+        </div>
+    </div>
+    
+    <form id="exercise-form" method="POST" action="{{ url_for('submit_answer', exercise_id=exercise.id) }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        
+        <div class="upload-container" onclick="document.getElementById('file-input').click()">
+            <div class="upload-icon">
+                <i class="fas fa-cloud-upload-alt"></i>
+            </div>
+            <div class="upload-text">Cliquez ou glissez votre fichier ici</div>
+            <div class="upload-subtext">
+                Types acceptés : {{ content.allowed_extensions|join(', ')|upper }} (Max. {{ content.max_file_size }}Mo)
+            </div>
+        </div>
+        
+        <input type="file" id="file-input" name="file" class="file-input" accept=".{{ content.allowed_extensions|join(',.')|lower }}">
+        
+        <div class="selected-file" id="selected-file">
+            <div class="file-name" id="file-name"></div>
+            <div class="file-size" id="file-size"></div>
+        </div>
+        
+        <button type="submit" class="submit-button" id="submit-button" disabled>
+            Soumettre le fichier
+        </button>
+    </form>
+    
+    {% if last_attempts %}
+    <div class="previous-submissions">
+        <h4>Soumissions précédentes</h4>
+        
+        {% for attempt in last_attempts %}
+        <div class="submission-card">
+            <div class="submission-header">
+                <div class="submission-date">
+                    Soumis le {{ attempt.created_at.strftime('%d/%m/%Y à %H:%M') }}
+                </div>
+                <div class="submission-status {% if attempt.score is none %}status-pending{% else %}status-graded{% endif %}">
+                    {% if attempt.score is none %}
+                        En attente de correction
+                    {% else %}
+                        Corrigé
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="submission-file">
+                <i class="fas fa-file"></i>
+                {{ attempt.file_name }}
+            </div>
+            
+            {% if attempt.score is not none %}
+            <div class="submission-grade">
+                Note : {{ attempt.score }}/20
+            </div>
+            {% endif %}
+            
+            {% if attempt.feedback %}
+            <div class="submission-feedback">
+                {{ attempt.feedback }}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('file-input');
+    const selectedFile = document.getElementById('selected-file');
+    const fileName = document.getElementById('file-name');
+    const fileSize = document.getElementById('file-size');
+    const submitButton = document.getElementById('submit-button');
+    const maxSize = {{ content.max_file_size }} * 1024 * 1024; // Convertir en octets
+    
+    fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            // Vérifier la taille du fichier
+            if (file.size > maxSize) {
+                alert(`Le fichier est trop volumineux. La taille maximale est de ${maxSize / (1024 * 1024)} Mo.`);
+                fileInput.value = '';
+                selectedFile.classList.remove('visible');
+                submitButton.disabled = true;
+                return;
+            }
+            
+            // Vérifier l'extension du fichier
+            const extension = file.name.split('.').pop().toLowerCase();
+            const allowedExtensions = {{ content.allowed_extensions|tojson }};
+            if (!allowedExtensions.includes(extension)) {
+                alert('Type de fichier non autorisé.');
+                fileInput.value = '';
+                selectedFile.classList.remove('visible');
+                submitButton.disabled = true;
+                return;
+            }
+            
+            // Afficher les informations du fichier
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            selectedFile.classList.add('visible');
+            submitButton.disabled = false;
+        } else {
+            selectedFile.classList.remove('visible');
+            submitButton.disabled = true;
+        }
+    });
+    
+    // Support du glisser-déposer
+    const uploadContainer = document.querySelector('.upload-container');
+    
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        uploadContainer.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+        uploadContainer.addEventListener(eventName, highlight, false);
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+        uploadContainer.addEventListener(eventName, unhighlight, false);
+    });
+    
+    function highlight(e) {
+        uploadContainer.classList.add('bg-light');
+    }
+    
+    function unhighlight(e) {
+        uploadContainer.classList.remove('bg-light');
+    }
+    
+    uploadContainer.addEventListener('drop', handleDrop, false);
+    
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const file = dt.files[0];
+        
+        fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('change'));
+    }
+});
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+</script>
+{% endblock %}

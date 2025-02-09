@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Tableau de bord - Enseignant{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Tableau de bord enseignant</h1>
+    
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Actions rapides</h5>
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('create_class') }}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Créer une nouvelle classe
+                        </a>
+                        <a href="{{ url_for('exercise_library') }}" class="btn btn-success">
+                            <i class="fas fa-book"></i> Accéder à la bibliothèque d'exercices
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Statistiques</h5>
+                    <p>Nombre de classes : {{ classes|length }}</p>
+                    {% if classes %}
+                    <p>Nombre total d'élèves : {{ total_students }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5 class="card-title">Mes classes</h5>
+            {% if classes %}
+            <div class="list-group">
+                {% for class in classes %}
+                <div class="list-group-item list-group-item-action">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">{{ class.name }}</h5>
+                        <small>{{ class.students|length }} élèves</small>
+                    </div>
+                    <p class="mb-1">{{ class.description }}</p>
+                    <div class="mt-2">
+                        <a href="{{ url_for('view_class', class_id=class.id) }}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-eye"></i> Voir la classe
+                        </a>
+                        <a href="{{ url_for('edit_class', class_id=class.id) }}" class="btn btn-sm btn-secondary">
+                            <i class="fas fa-edit"></i> Modifier
+                        </a>
+                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ class.id }}">
+                            <i class="fas fa-trash"></i> Supprimer
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Modal de confirmation de suppression pour chaque classe -->
+                <div class="modal fade" id="deleteModal{{ class.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ class.id }}" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="deleteModalLabel{{ class.id }}">Confirmer la suppression</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                Êtes-vous sûr de vouloir supprimer la classe "{{ class.name }}" ? Cette action est irréversible.
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                                <form action="{{ url_for('delete_class', class_id=class.id) }}" method="POST" style="display: inline;">
+                                    <button type="submit" class="btn btn-danger">Supprimer</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p>Vous n'avez pas encore créé de classe.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

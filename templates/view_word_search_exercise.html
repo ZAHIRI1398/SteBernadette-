@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}{{ exercise.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>{{ exercise.title }}</h2>
+    {% if exercise.description %}
+    <p class="lead">{{ exercise.description }}</p>
+    {% endif %}
+    
+    <div class="exercise-container">
+        <div class="row">
+            <!-- Grille de mots mêlés (colonne gauche) -->
+            <div class="col-md-8">
+                <div class="word-search-grid mb-4" id="word-search-grid">
+                    {% set content = exercise.content|from_json %}
+                    {% for row in content.grid %}
+                    <div class="grid-row">
+                        {% for letter in row %}
+                        <div class="grid-cell" data-letter="{{ letter }}">{{ letter }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Liste des mots à trouver (colonne droite) -->
+            <div class="col-md-4">
+                <div class="word-list mb-4">
+                    <h4>Mots à trouver :</h4>
+                    <div id="word-list" class="d-flex flex-column gap-2">
+                        {% for word in content.words %}
+                        <div class="word-item" data-word="{{ word }}">{{ word }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <form id="exercise-form" method="POST" action="{{ url_for('submit_answer', exercise_id=exercise.id) }}">
+            <div class="form-group">
+                <label for="answers">Mots trouvés :</label>
+                <textarea class="form-control" id="answers" name="answers" rows="5" readonly></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary mt-3">Vérifier</button>
+        </form>
+    </div>
+</div>
+
+<style>
+.exercise-container {
+    padding: 20px;
+}
+
+.word-search-grid {
+    display: grid;
+    gap: 2px;
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.grid-row {
+    display: flex;
+    gap: 2px;
+}
+
+.grid-cell {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    font-weight: bold;
+    background-color: white;
+    border: 1px solid #dee2e6;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s;
+    text-transform: uppercase;
+}
+
+.grid-cell:hover {
+    background-color: #e9ecef;
+}
+
+.grid-cell.selected {
+    background-color: #cfe2ff;
+    border-color: #0d6efd;
+}
+
+.grid-cell.found {
+    background-color: #d1e7dd;
+    border-color: #198754;
+    color: #198754;
+}
+
+.word-list {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    position: sticky;
+    top: 20px;
+}
+
+.word-item {
+    display: block;
+    padding: 8px 16px;
+    background-color: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    margin: 4px 0;
+    font-weight: 500;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.word-item:hover {
+    background-color: #e9ecef;
+}
+
+.word-item.found {
+    background-color: #d1e7dd;
+    border-color: #198754;
+    color: #198754;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const foundWords = new Set();
+    const textarea = document.getElementById('answers');
+    let selectedCells = [];
+    let isSelecting = false;
+    
+    // Fonction pour ajouter un mot trouvé
+    function addFoundWord(word) {
+        if (!foundWords.has(word)) {
+            foundWords.add(word);
+            // Marquer le mot comme trouvé dans la liste
+            const wordItem = document.querySelector(`.word-item[data-word="${word}"]`);
+            if (wordItem) {
+                wordItem.classList.add('found');
+            }
+            // Marquer les cellules sélectionnées
+            selectedCells.forEach(cell => {
+                cell.classList.add('found');
+            });
+            updateTextarea();
+        }
+    }
+    
+    // Fonction pour mettre à jour le textarea
+    function updateTextarea() {
+        textarea.value = Array.from(foundWords).join('\n');
+    }
+    
+    // Gérer la sélection des cellules
+    document.querySelectorAll('.grid-cell').forEach(cell => {
+        cell.addEventListener('mousedown', (e) => {
+            isSelecting = true;
+            selectedCells = [cell];
+            cell.classList.add('selected');
+        });
+        
+        cell.addEventListener('mouseover', (e) => {
+            if (isSelecting) {
+                if (!selectedCells.includes(cell)) {
+                    selectedCells.push(cell);
+                    cell.classList.add('selected');
+                }
+            }
+        });
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isSelecting) {
+            isSelecting = false;
+            // Construire le mot
+            const word = selectedCells.map(cell => cell.dataset.letter).join('').toLowerCase();
+            const reversedWord = word.split('').reverse().join('');
+            
+            // Vérifier si le mot est dans la liste
+            const wordItems = document.querySelectorAll('.word-item');
+            const words = Array.from(wordItems).map(item => item.dataset.word.toLowerCase());
+            
+            if (words.includes(word)) {
+                addFoundWord(word);
+            } else if (words.includes(reversedWord)) {
+                addFoundWord(reversedWord);
+            } else {
+                // Effacer la sélection si le mot n'est pas valide
+                selectedCells.forEach(cell => {
+                    if (!cell.classList.contains('found')) {
+                        cell.classList.remove('selected');
+                    }
+                });
+            }
+            selectedCells = [];
+        }
+    });
+    
+    // Gérer le clic sur les mots de la liste
+    document.querySelectorAll('.word-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const word = this.dataset.word;
+            if (this.classList.contains('found')) {
+                foundWords.delete(word);
+                this.classList.remove('found');
+                // Retirer la coloration des cellules correspondantes
+                document.querySelectorAll('.grid-cell.found').forEach(cell => {
+                    cell.classList.remove('found');
+                });
+            } else {
+                foundWords.add(word);
+                this.classList.add('found');
+            }
+            updateTextarea();
+        });
+    });
+});
+</script>
+{% endblock %}

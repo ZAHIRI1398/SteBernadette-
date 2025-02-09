@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block title %}Créer un exercice - Saint Bernadette{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Créer un exercice</h2>
+    
+    <form method="POST" action="{{ url_for('create_exercise') }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        
+        <div class="mb-3">
+            <label for="title" class="form-label">Titre de l'exercice</label>
+            <input type="text" class="form-control" id="title" name="title" required>
+        </div>
+        
+        <div class="mb-3">
+            <label for="description" class="form-label">Description (optionnelle)</label>
+            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+        </div>
+        
+        <div class="mb-3">
+            <label for="exercise_type" class="form-label">Type d'exercice</label>
+            <select class="form-select" id="exercise_type" name="exercise_type" required>
+                <option value="">Choisir un type...</option>
+                <option value="qcm">QCM</option>
+                <option value="drag_and_drop">Mots à placer</option>
+                <option value="pairs">Paires à associer</option>
+                <option value="file">Dépôt de fichier</option>
+                <option value="word_search">Mots mêlés</option>
+            </select>
+        </div>
+        
+        <div class="mb-3">
+            <label for="image" class="form-label">Image de l'exercice (optionnelle)</label>
+            <input type="file" class="form-control" id="image" name="image" accept="image/*">
+            <div class="form-text">Formats acceptés : PNG, JPG, JPEG, GIF. Taille maximale : 5 MB</div>
+        </div>
+        
+        <!-- Contenu spécifique au QCM -->
+        <div id="qcm_fields" class="exercise-type-fields" style="display: none;">
+            <div id="questions_container">
+                <div class="question-block mb-4">
+                    <div class="form-group mb-3">
+                        <label class="form-label">Question 1</label>
+                        <input type="text" class="form-control" name="questions[]" required>
+                    </div>
+                    
+                    <div class="options-container">
+                        <div class="form-group mb-2">
+                            <div class="input-group">
+                                <div class="input-group-text">
+                                    <input type="radio" name="correct_answer_1" value="0" required>
+                                </div>
+                                <input type="text" class="form-control" name="options_1[]" placeholder="Option 1" required>
+                                <button type="button" class="btn btn-outline-danger" onclick="removeOption(this)">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addOption(this)">
+                            <i class="fas fa-plus"></i> Ajouter une option
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center mt-3 mb-4">
+                <button type="button" class="btn btn-primary" onclick="addQuestion()">
+                    <i class="fas fa-plus"></i> Ajouter une question
+                </button>
+            </div>
+        </div>
+        
+        <!-- Contenu spécifique au drag_and_drop -->
+        <div id="drag_and_drop_fields" class="exercise-type-fields" style="display: none;">
+            <div class="form-group mb-3">
+                <label for="sentence" class="form-label">Texte de l'exercice</label>
+                <div class="form-text mb-2">
+                    Utilisez ___ (trois underscores) pour indiquer les emplacements où les mots doivent être placés.
+                </div>
+                <textarea class="form-control" id="sentence" name="sentence" rows="5" required></textarea>
+            </div>
+            
+            <div class="form-group mb-3">
+                <label for="words" class="form-label">Mots à placer</label>
+                <div class="form-text mb-2">
+                    Entrez les mots séparés par des virgules, dans l'ordre correspondant aux blancs.
+                </div>
+                <input type="text" class="form-control" id="words" name="words" required>
+            </div>
+        </div>
+        
+        <!-- Contenu spécifique aux paires -->
+        <div id="pairs_fields" class="exercise-type-fields" style="display: none;">
+            <div id="pairs_container">
+                <div class="pair-block mb-3">
+                    <div class="row">
+                        <div class="col">
+                            <div class="mb-2">
+                                <input type="file" class="form-control" name="items_left_image[]" accept="image/*">
+                            </div>
+                            <input type="text" class="form-control" name="items_left[]" placeholder="Élément gauche (texte)" required>
+                        </div>
+                        <div class="col">
+                            <div class="mb-2">
+                                <input type="file" class="form-control" name="items_right_image[]" accept="image/*">
+                            </div>
+                            <input type="text" class="form-control" name="items_right[]" placeholder="Élément droit (texte)" required>
+                        </div>
+                        <div class="col-auto">
+                            <button type="button" class="btn btn-outline-danger" onclick="removePair(this)">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button type="button" class="btn btn-outline-secondary" onclick="addPair()">
+                <i class="fas fa-plus"></i> Ajouter une paire
+            </button>
+        </div>
+        
+        <!-- Contenu spécifique au fichier -->
+        <div id="file_fields" class="exercise-type-fields" style="display: none;">
+            <div class="form-group mb-3">
+                <label for="instructions" class="form-label">Instructions pour le dépôt de fichier</label>
+                <textarea class="form-control" id="instructions" name="instructions" rows="4" required></textarea>
+                <div class="form-text">
+                    Expliquez aux étudiants quel type de fichier ils doivent déposer et les critères d'évaluation.
+                </div>
+            </div>
+            
+            <div class="form-group mb-3">
+                <label class="form-label">Types de fichiers acceptés</label>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="allowed_extensions[]" value="pdf" id="allow_pdf">
+                    <label class="form-check-label" for="allow_pdf">PDF</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="allowed_extensions[]" value="doc,docx" id="allow_doc">
+                    <label class="form-check-label" for="allow_doc">Word (DOC, DOCX)</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="allowed_extensions[]" value="jpg,jpeg,png" id="allow_images">
+                    <label class="form-check-label" for="allow_images">Images (JPG, PNG)</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="allowed_extensions[]" value="zip,rar" id="allow_archives">
+                    <label class="form-check-label" for="allow_archives">Archives (ZIP, RAR)</label>
+                </div>
+            </div>
+            
+            <div class="form-group mb-3">
+                <label for="max_file_size" class="form-label">Taille maximale du fichier (en Mo)</label>
+                <input type="number" class="form-control" id="max_file_size" name="max_file_size" min="1" max="100" value="10" required>
+            </div>
+        </div>
+        
+        <!-- Contenu spécifique aux mots mêlés -->
+        <div id="word_search_fields" class="exercise-type-fields" style="display: none;">
+            <div class="form-group mb-3">
+                <label for="grid_size" class="form-label">Taille de la grille</label>
+                <div class="row">
+                    <div class="col-md-6">
+                        <input type="number" class="form-control" id="grid_rows" name="grid_rows" min="5" max="15" value="10" required>
+                        <div class="form-text">Nombre de lignes (5-15)</div>
+                    </div>
+                    <div class="col-md-6">
+                        <input type="number" class="form-control" id="grid_cols" name="grid_cols" min="5" max="15" value="10" required>
+                        <div class="form-text">Nombre de colonnes (5-15)</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group mb-3">
+                <label for="word_search_words" class="form-label">Mots à cacher</label>
+                <div class="form-text mb-2">
+                    Entrez les mots à cacher dans la grille, séparés par des virgules.
+                    Les mots peuvent être placés horizontalement, verticalement ou en diagonale.
+                </div>
+                <input type="text" class="form-control" name="word_search_words" required>
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary">Créer l'exercice</button>
+            <a href="{{ url_for('exercise_library') }}" class="btn btn-secondary">Annuler</a>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const exerciseTypeSelect = document.getElementById('exercise_type');
+    const dragAndDropFields = document.getElementById('drag_and_drop_fields');
+    const pairsFields = document.getElementById('pairs_fields');
+    const qcmFields = document.getElementById('qcm_fields');
+    const fileFields = document.getElementById('file_fields');
+    const wordSearchFields = document.getElementById('word_search_fields');
+    
+    function updateFields() {
+        const selectedType = exerciseTypeSelect.value;
+        
+        // Cacher tous les champs spécifiques
+        document.querySelectorAll('.exercise-type-fields').forEach(field => {
+            field.style.display = 'none';
+            
+            // Désactiver les champs requis quand ils sont cachés
+            field.querySelectorAll('[required]').forEach(input => {
+                input.required = false;
+            });
+        });
+        
+        // Afficher les champs correspondant au type sélectionné
+        let selectedFields = null;
+        switch(selectedType) {
+            case 'drag_and_drop':
+                selectedFields = dragAndDropFields;
+                break;
+            case 'pairs':
+                selectedFields = pairsFields;
+                break;
+            case 'qcm':
+                selectedFields = qcmFields;
+                break;
+            case 'file':
+                selectedFields = fileFields;
+                break;
+            case 'word_search':
+                selectedFields = wordSearchFields;
+                break;
+        }
+        
+        if (selectedFields) {
+            selectedFields.style.display = 'block';
+            // Activer les champs requis pour le type sélectionné
+            selectedFields.querySelectorAll('[required]').forEach(input => {
+                input.required = true;
+            });
+        }
+    }
+    
+    exerciseTypeSelect.addEventListener('change', updateFields);
+    updateFields(); // Appeler au chargement pour initialiser l'affichage
+});
+
+// Fonctions pour le QCM
+let questionCount = 1;
+
+function addQuestion() {
+    questionCount++;
+    const container = document.getElementById('questions_container');
+    const questionBlock = document.createElement('div');
+    questionBlock.className = 'question-block mb-4';
+    questionBlock.innerHTML = `
+        <div class="form-group mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label">Question ${questionCount}</label>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeQuestion(this)">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+            <input type="text" class="form-control" name="questions[]" required>
+        </div>
+        
+        <div class="options-container">
+            <div class="form-group mb-2">
+                <div class="input-group">
+                    <div class="input-group-text">
+                        <input type="radio" name="correct_answer_${questionCount}" value="0" required>
+                    </div>
+                    <input type="text" class="form-control" name="options_${questionCount}[]" placeholder="Option 1" required>
+                    <button type="button" class="btn btn-outline-danger" onclick="removeOption(this)">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addOption(this)">
+                <i class="fas fa-plus"></i> Ajouter une option
+            </button>
+        </div>
+    `;
+    container.appendChild(questionBlock);
+}
+
+function removeQuestion(button) {
+    button.closest('.question-block').remove();
+    questionCount--;
+    // Mettre à jour les numéros des questions
+    document.querySelectorAll('.question-block').forEach((block, index) => {
+        const label = block.querySelector('label');
+        label.textContent = `Question ${index + 1}`;
+        const radios = block.querySelectorAll('input[type="radio"]');
+        radios.forEach(radio => {
+            radio.name = `correct_answer_${index + 1}`;
+        });
+        const options = block.querySelectorAll('input[type="text"][name^="options_"]');
+        options.forEach(option => {
+            option.name = `options_${index + 1}[]`;
+        });
+    });
+}
+
+function addOption(button) {
+    const optionsContainer = button.closest('.question-block').querySelector('.options-container');
+    const optionCount = optionsContainer.children.length + 1;
+    const questionNumber = button.closest('.question-block').querySelector('label').textContent.match(/\d+/)[0];
+    
+    const optionGroup = document.createElement('div');
+    optionGroup.className = 'form-group mb-2';
+    optionGroup.innerHTML = `
+        <div class="input-group">
+            <div class="input-group-text">
+                <input type="radio" name="correct_answer_${questionNumber}" value="${optionCount - 1}" required>
+            </div>
+            <input type="text" class="form-control" name="options_${questionNumber}[]" placeholder="Option ${optionCount}" required>
+            <button type="button" class="btn btn-outline-danger" onclick="removeOption(this)">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    optionsContainer.appendChild(optionGroup);
+}
+
+function removeOption(button) {
+    const optionsContainer = button.closest('.options-container');
+    if (optionsContainer.children.length > 1) {
+        button.closest('.form-group').remove();
+        // Mettre à jour les valeurs des boutons radio
+        const radios = optionsContainer.querySelectorAll('input[type="radio"]');
+        radios.forEach((radio, index) => {
+            radio.value = index;
+        });
+    } else {
+        alert('Vous devez avoir au moins une option.');
+    }
+}
+
+// Fonctions pour les paires
+function addPair() {
+    const container = document.getElementById('pairs_container');
+    const newPair = document.createElement('div');
+    newPair.className = 'pair-block mb-3';
+    newPair.innerHTML = `
+        <div class="row">
+            <div class="col">
+                <div class="mb-2">
+                    <input type="file" class="form-control" name="items_left_image[]" accept="image/*">
+                </div>
+                <input type="text" class="form-control" name="items_left[]" placeholder="Élément gauche (texte)" required>
+            </div>
+            <div class="col">
+                <div class="mb-2">
+                    <input type="file" class="form-control" name="items_right_image[]" accept="image/*">
+                </div>
+                <input type="text" class="form-control" name="items_right[]" placeholder="Élément droit (texte)" required>
+            </div>
+            <div class="col-auto">
+                <button type="button" class="btn btn-outline-danger" onclick="removePair(this)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    container.appendChild(newPair);
+}
+
+function removePair(button) {
+    const pairsContainer = document.getElementById('pairs_container');
+    if (pairsContainer.children.length > 1) {
+        button.closest('.pair-block').remove();
+    } else {
+        alert('Vous devez avoir au moins une paire.');
+    }
+}
+</script>
+{% endblock %}

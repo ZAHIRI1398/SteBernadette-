@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Résultats - {{ exercise.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Résultats : {{ exercise.title }}</h2>
+    
+    <div class="card mb-4">
+        <div class="card-body">
+            <h4 class="card-title">Score : 
+                <span class="badge {% if attempt.score >= 70 %}bg-success{% else %}bg-danger{% endif %}">
+                    {{ "%.1f"|format(attempt.score) }}%
+                </span>
+            </h4>
+            
+            {% set feedback = attempt.get_feedback() %}
+            <p class="lead">
+                Vous avez trouvé {{ feedback.words_found }} mot{{ 's' if feedback.words_found != 1 }} sur {{ feedback.total_words }}.
+            </p>
+            
+            <div class="mt-4">
+                <h5>Détails des mots :</h5>
+                <div class="row">
+                    {% for detail in feedback.details %}
+                    <div class="col-md-4 mb-2">
+                        <div class="d-flex align-items-center">
+                            {% if detail.found %}
+                            <i class="fas fa-check text-success me-2"></i>
+                            {% else %}
+                            <i class="fas fa-times text-danger me-2"></i>
+                            {% endif %}
+                            <span class="{% if detail.found %}text-success{% else %}text-danger{% endif %}">
+                                {{ detail.word }}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mt-4">
+        <a href="{{ url_for('view_exercise', exercise_id=exercise.id) }}" class="btn btn-primary">
+            <i class="fas fa-redo"></i> Réessayer
+        </a>
+        <a href="{{ url_for('exercise_library') }}" class="btn btn-secondary">
+            <i class="fas fa-book"></i> Retour à la bibliothèque
+        </a>
+    </div>
+</div>
+
+<style>
+.card {
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.badge {
+    font-size: 1.2rem;
+    padding: 0.5rem 1rem;
+}
+
+.fas {
+    font-size: 1.1rem;
+}
+</style>
+{% endblock %}

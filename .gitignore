@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+venv/
+
+# Base de données
+*.db
+*.sqlite3
+
+# Configuration
+.env
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# Système
+.DS_Store
+Thumbs.db

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Mes progrès dans le cours : {{ course.title }}</h2>
+    
+    <!-- Vue d'ensemble -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Mon résumé</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h5>Exercices tentés</h5>
+                        <h2 class="text-primary">{{ stats.exercises_attempted }}</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h5>Exercices réussis</h5>
+                        <h2 class="text-success">{{ stats.exercises_completed }}</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h5>Note moyenne</h5>
+                        <h2 class="text-info">{{ "%.1f"|format(stats.average_score) }}%</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h5>Progression</h5>
+                        <h2 class="text-warning">{{ "%.1f"|format(stats.exercises_completed / stats.exercises_attempted * 100 if stats.exercises_attempted > 0 else 0) }}%</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Meilleur exercice et points à améliorer -->
+    <div class="row">
+        {% if stats.best_exercise %}
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">Mon meilleur exercice</h4>
+                </div>
+                <div class="card-body">
+                    <h5>{{ stats.best_exercise.title }}</h5>
+                    <p class="text-muted">{{ stats.best_exercise.description }}</p>
+                    <a href="{{ url_for('view_exercise', exercise_id=stats.best_exercise.id) }}" 
+                       class="btn btn-outline-success">
+                        <i class="fas fa-eye"></i> Revoir l'exercice
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if stats.needs_improvement %}
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-warning">
+                    <h4 class="mb-0">Points à améliorer</h4>
+                </div>
+                <div class="card-body">
+                    <h5>{{ stats.needs_improvement.title }}</h5>
+                    <p class="text-muted">{{ stats.needs_improvement.description }}</p>
+                    <a href="{{ url_for('view_exercise', exercise_id=stats.needs_improvement.id) }}" 
+                       class="btn btn-outline-warning">
+                        <i class="fas fa-redo"></i> Réessayer l'exercice
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

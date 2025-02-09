@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Ajouter l'exercice à une classe{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('exercise_library') }}">Bibliothèque d'exercices</a></li>
+            <li class="breadcrumb-item active">Ajouter à une classe</li>
+        </ol>
+    </nav>
+
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title mb-0">Ajouter l'exercice "{{ exercise.title }}" à une classe</h2>
+        </div>
+        <div class="card-body">
+            <form id="addExerciseForm" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="mb-3">
+                    <label for="class_select" class="form-label">Sélectionner une classe</label>
+                    <select class="form-select" id="class_select" name="class_id" required>
+                        <option value="">Choisir une classe...</option>
+                        {% for class in classes %}
+                        <option value="{{ class.id }}">{{ class.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="course_select" class="form-label">Sélectionner un cours</label>
+                    <select class="form-select" id="course_select" name="course_id" required disabled>
+                        <option value="">Choisir un cours...</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="submitBtn" disabled>Ajouter l'exercice</button>
+                <a href="{{ url_for('exercise_library') }}" class="btn btn-secondary">Annuler</a>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const classSelect = document.getElementById('class_select');
+    const courseSelect = document.getElementById('course_select');
+    const submitBtn = document.getElementById('submitBtn');
+
+    classSelect.addEventListener('change', function() {
+        const classId = this.value;
+        courseSelect.disabled = !classId;
+        courseSelect.innerHTML = '<option value="">Chargement des cours...</option>';
+        submitBtn.disabled = true;
+
+        if (classId) {
+            fetch(`/get_courses/${classId}`)
+                .then(response => response.json())
+                .then(courses => {
+                    courseSelect.innerHTML = '<option value="">Choisir un cours...</option>';
+                    courses.forEach(course => {
+                        const option = document.createElement('option');
+                        option.value = course.id;
+                        option.textContent = course.title;
+                        courseSelect.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    console.error('Erreur:', error);
+                    courseSelect.innerHTML = '<option value="">Erreur lors du chargement des cours</option>';
+                });
+        } else {
+            courseSelect.innerHTML = '<option value="">Choisir un cours...</option>';
+        }
+    });
+
+    courseSelect.addEventListener('change', function() {
+        submitBtn.disabled = !this.value;
+    });
+});
+</script>
+{% endblock %}
+{% endblock %}

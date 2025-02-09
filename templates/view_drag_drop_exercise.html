@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}{{ exercise.title }} - Saint Bernadette{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title mb-0">{{ exercise.title }}</h2>
+        </div>
+        <div class="card-body">
+            {% if exercise.description %}
+            <p class="card-text">{{ exercise.description }}</p>
+            {% endif %}
+
+            {% if exercise.image_path %}
+            <img src="{{ url_for('static', filename=exercise.image_path) }}" alt="Image de l'exercice" class="img-fluid mb-3">
+            {% endif %}
+
+            <form method="POST" action="{{ url_for('submit_answer', exercise_id=exercise.id) }}" id="dragDropForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {% if course %}
+                <input type="hidden" name="course_id" value="{{ course.id }}">
+                {% endif %}
+
+                <div class="mb-4">
+                    <div id="sentence" class="mb-3">
+                        {% for part in exercise.get_content().sentence.split('___') %}
+                            {{ part }}
+                            {% if not loop.last %}
+                            <span class="dropzone" ondrop="drop(event)" ondragover="allowDrop(event)" data-index="{{ loop.index0 }}"></span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    <div id="answers-container">
+                        {# Les réponses seront stockées ici comme champs cachés #}
+                    </div>
+
+                    <div id="wordBank" class="border p-3 rounded">
+                        <h5>Mots à placer :</h5>
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for word in exercise.get_content().words|sort %}
+                            <div class="word badge bg-primary" draggable="true" ondragstart="drag(event)">{{ word }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Valider</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.dropzone {
+    display: inline-block;
+    width: 120px;
+    height: 30px;
+    border: 2px dashed #ccc;
+    border-radius: 4px;
+    margin: 0 5px;
+    vertical-align: middle;
+    background-color: #f8f9fa;
+}
+
+.dropzone.active {
+    border-color: #0d6efd;
+    background-color: #e9ecef;
+}
+
+.word {
+    cursor: move;
+    user-select: none;
+    padding: 5px 10px;
+    margin: 5px;
+    display: inline-block;
+}
+
+.word.placed {
+    display: none;
+}
+</style>
+
+<script>
+function allowDrop(ev) {
+    ev.preventDefault();
+    ev.target.classList.add('active');
+}
+
+function drag(ev) {
+    ev.dataTransfer.setData("text", ev.target.innerText);
+    ev.target.classList.add('dragging');
+}
+
+function drop(ev) {
+    ev.preventDefault();
+    ev.target.classList.remove('active');
+    
+    var data = ev.dataTransfer.getData("text");
+    ev.target.textContent = data;
+    ev.target.style.backgroundColor = '#e3f2fd';
+    ev.target.style.border = '2px solid #0d6efd';
+    
+    // Mettre à jour les champs cachés
+    updateAnswers();
+    
+    // Masquer le mot dans la banque de mots
+    document.querySelectorAll('.word').forEach(word => {
+        if (word.innerText === data && word.classList.contains('dragging')) {
+            word.classList.add('placed');
+        }
+        word.classList.remove('dragging');
+    });
+}
+
+function updateAnswers() {
+    // Effacer les anciens champs de réponse
+    const container = document.getElementById('answers-container');
+    container.innerHTML = '';
+    
+    // Créer un champ caché pour chaque réponse dans l'ordre
+    document.querySelectorAll('.dropzone').forEach((zone, index) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'answers[]';
+        input.value = zone.textContent || '';
+        container.appendChild(input);
+    });
+}
+
+// Permettre de retirer un mot d'une zone de dépôt
+document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.addEventListener('click', function() {
+        if (this.textContent) {
+            // Rendre le mot à nouveau disponible dans la banque
+            document.querySelectorAll('.word').forEach(word => {
+                if (word.innerText === this.textContent) {
+                    word.classList.remove('placed');
+                }
+            });
+            
+            // Réinitialiser la zone
+            this.textContent = '';
+            this.style.backgroundColor = '#f8f9fa';
+            this.style.border = '2px dashed #ccc';
+            
+            // Mettre à jour les champs cachés
+            updateAnswers();
+        }
+    });
+});
+
+// Ajouter la validation du formulaire
+document.getElementById('dragDropForm').addEventListener('submit', function(e) {
+    const answers = document.querySelectorAll('input[name="answers[]"]');
+    const emptyAnswers = Array.from(answers).some(input => !input.value);
+    
+    if (emptyAnswers) {
+        e.preventDefault();
+        alert('Veuillez placer tous les mots avant de valider.');
+    }
+});
+</script>
+{% endblock %}

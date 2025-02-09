@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Modifier l'exercice{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="mb-0">Modifier l'exercice</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('edit_exercise', exercise_id=exercise.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Titre *</label>
+                            <input type="text" class="form-control" id="title" name="title" value="{{ exercise.title }}" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3">{{ exercise.description }}</textarea>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="subject" class="form-label">Matière *</label>
+                                    <select class="form-select" id="subject" name="subject" required>
+                                        <option value="">Choisir...</option>
+                                        <option value="mathematiques" {% if exercise.subject == 'mathematiques' %}selected{% endif %}>Mathématiques</option>
+                                        <option value="francais" {% if exercise.subject == 'francais' %}selected{% endif %}>Français</option>
+                                        <option value="histoire" {% if exercise.subject == 'histoire' %}selected{% endif %}>Histoire</option>
+                                        <option value="geographie" {% if exercise.subject == 'geographie' %}selected{% endif %}>Géographie</option>
+                                        <option value="sciences" {% if exercise.subject == 'sciences' %}selected{% endif %}>Sciences</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="level" class="form-label">Niveau *</label>
+                                    <select class="form-select" id="level" name="level" required>
+                                        <option value="">Choisir...</option>
+                                        <option value="facile" {% if exercise.level == 'facile' %}selected{% endif %}>Facile</option>
+                                        <option value="moyen" {% if exercise.level == 'moyen' %}selected{% endif %}>Moyen</option>
+                                        <option value="difficile" {% if exercise.level == 'difficile' %}selected{% endif %}>Difficile</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="type" class="form-label">Type *</label>
+                                    <select class="form-select" id="type" name="type" required>
+                                        <option value="">Choisir...</option>
+                                        <option value="qcm" {% if exercise.type == 'qcm' %}selected{% endif %}>QCM</option>
+                                        <option value="texte" {% if exercise.type == 'texte' %}selected{% endif %}>Texte</option>
+                                        <option value="calcul" {% if exercise.type == 'calcul' %}selected{% endif %}>Calcul</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Contenu de l'exercice *</label>
+                            <div id="exerciseContent">
+                                <!-- Le contenu sera chargé dynamiquement en fonction du type d'exercice -->
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('exercise_library') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Retour
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Enregistrer les modifications
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+// Fonction pour charger le contenu initial
+function loadInitialContent() {
+    const type = document.getElementById('type').value;
+    const content = {{ exercise.content|tojson }};
+    const contentDiv = document.getElementById('exerciseContent');
+    
+    if (type === 'qcm') {
+        contentDiv.innerHTML = `
+            <div class="mb-3">
+                <label class="form-label">Question</label>
+                <input type="text" class="form-control" name="question" value="${content.question}" required>
+            </div>
+            <div id="options">
+                ${content.options.map((option, index) => `
+                    <div class="mb-2">
+                        <div class="input-group">
+                            <div class="input-group-text">
+                                <input type="radio" name="correct_answer" value="${index}" ${content.correct_answer === index ? 'checked' : ''} required>
+                            </div>
+                            <input type="text" class="form-control" name="options[]" value="${option}" required>
+                            ${index > 1 ? `
+                                <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.parentElement.remove()">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addOption()">
+                <i class="fas fa-plus"></i> Ajouter une option
+            </button>
+        `;
+    } else if (type === 'texte') {
+        contentDiv.innerHTML = `
+            <div class="mb-3">
+                <label class="form-label">Question</label>
+                <input type="text" class="form-control" name="question" value="${content.question}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Réponse attendue</label>
+                <textarea class="form-control" name="answer" rows="3" required>${content.answer}</textarea>
+            </div>
+        `;
+    } else if (type === 'calcul') {
+        contentDiv.innerHTML = `
+            <div class="mb-3">
+                <label class="form-label">Expression mathématique</label>
+                <input type="text" class="form-control" name="expression" value="${content.expression}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Résultat</label>
+                <input type="number" step="any" class="form-control" name="result" value="${content.result}" required>
+            </div>
+        `;
+    } else {
+        contentDiv.innerHTML = '';
+    }
+}
+
+document.getElementById('type').addEventListener('change', function() {
+    const type = this.value;
+    const contentDiv = document.getElementById('exerciseContent');
+    
+    if (type === 'qcm') {
+        contentDiv.innerHTML = `
+            <div class="mb-3">
+                <label class="form-label">Question</label>
+                <input type="text" class="form-control" name="question" required>
+            </div>
+            <div id="options">
+                <div class="mb-2">
+                    <div class="input-group">
+                        <div class="input-group-text">
+                            <input type="radio" name="correct_answer" value="0" required>
+                        </div>
+                        <input type="text" class="form-control" name="options[]" placeholder="Option 1" required>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addOption()">
+                <i class="fas fa-plus"></i> Ajouter une option
+            </button>
+        `;
+    } else if (type === 'texte') {
+        contentDiv.innerHTML = `
+            <div class="mb-3">
+                <label class="form-label">Question</label>
+                <input type="text" class="form-control" name="question" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Réponse attendue</label>
+                <textarea class="form-control" name="answer" rows="3" required></textarea>
+            </div>
+        `;
+    } else if (type === 'calcul') {
+        contentDiv.innerHTML = `
+            <div class="mb-3">
+                <label class="form-label">Expression mathématique</label>
+                <input type="text" class="form-control" name="expression" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Résultat</label>
+                <input type="number" step="any" class="form-control" name="result" required>
+            </div>
+        `;
+    } else {
+        contentDiv.innerHTML = '';
+    }
+});
+
+function addOption() {
+    const options = document.getElementById('options');
+    const optionCount = options.children.length;
+    
+    const newOption = document.createElement('div');
+    newOption.className = 'mb-2';
+    newOption.innerHTML = `
+        <div class="input-group">
+            <div class="input-group-text">
+                <input type="radio" name="correct_answer" value="${optionCount}" required>
+            </div>
+            <input type="text" class="form-control" name="options[]" placeholder="Option ${optionCount + 1}" required>
+            <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.parentElement.remove()">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `;
+    
+    options.appendChild(newOption);
+}
+
+// Charger le contenu initial au chargement de la page
+document.addEventListener('DOMContentLoaded', loadInitialContent);
+</script>
+{% endblock %}
+{% endblock %}

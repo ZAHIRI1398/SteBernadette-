@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+
+{% block title %}{{ exercise.title }}{% endblock %}
+
+{% block content %}
+<div class="exercise-container">
+    <h3 class="exercise-title">{{ exercise.title }}</h3>
+    
+    <form id="exercise-form" method="POST" action="{{ url_for('submit_answer', exercise_id=exercise.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="answers" id="answers-input">
+        
+        <div class="sentence-container" id="sentence-container"></div>
+        
+        <div class="word-bank" id="word-bank"></div>
+        
+        <button type="submit" class="verify-button">Vérifier</button>
+    </form>
+    
+    {% if last_attempt %}
+    <div class="results-container">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Résultats de votre dernière tentative</h4>
+            </div>
+            <div class="card-body">
+                <div class="score-section">
+                    <h2>{{ "%.1f"|format(last_attempt.score) }}%</h2>
+                    {% set feedback = last_attempt.feedback|from_json %}
+                    <p>Réponses correctes : {{ feedback.correct_answers }} sur {{ feedback.total_blanks }}</p>
+                </div>
+                
+                <div class="feedback-details">
+                    <h5>Détails des réponses :</h5>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Position</th>
+                                    <th>Votre réponse</th>
+                                    <th>Statut</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for detail in feedback.details %}
+                                <tr>
+                                    <td>{{ detail.position }}</td>
+                                    <td>{{ detail.user_answer }}</td>
+                                    <td>
+                                        {% if detail.is_correct %}
+                                        <span class="badge bg-success">Correct</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Incorrect</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.exercise-container {
+    max-width: 1200px;
+    margin: 40px auto;
+    padding: 20px;
+}
+
+.exercise-title {
+    font-size: 1.8rem;
+    color: #333;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.sentence-container {
+    font-size: 1.2rem;
+    line-height: 1.8;
+    margin: 20px 0;
+    padding: 30px;
+    background-color: #f8f9fa;
+    border-radius: 12px;
+    white-space: pre-wrap;
+    text-align: justify;
+}
+
+.word-bank {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin: 30px 0;
+    padding: 25px;
+    background-color: #e9ecef;
+    border-radius: 12px;
+    justify-content: center;
+}
+
+.word {
+    background-color: #6f42c1;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s;
+    font-size: 1.1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.word:hover {
+    background-color: #5a32a3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.word.used {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.blank {
+    display: inline-block;
+    min-width: 120px;
+    height: 30px;
+    border-bottom: 2px solid #6f42c1;
+    margin: 0 5px;
+    padding: 0 10px;
+    vertical-align: middle;
+    text-align: center;
+    color: #6f42c1;
+    font-weight: bold;
+    transition: all 0.2s;
+    line-height: 30px;
+}
+
+.blank.filled {
+    background-color: #f3f0ff;
+    border-radius: 4px;
+    border: 2px solid #6f42c1;
+}
+
+.verify-button {
+    display: block;
+    margin: 30px auto 0;
+    padding: 15px 50px;
+    font-size: 1.2rem;
+    background-color: #6f42c1;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.verify-button:hover {
+    background-color: #5a32a3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.results-container {
+    margin-top: 40px;
+}
+
+.score-section {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.score-section h2 {
+    font-size: 2.5rem;
+    color: #6f42c1;
+    margin-bottom: 10px;
+}
+
+.score-section p {
+    font-size: 1.2rem;
+    color: #495057;
+}
+
+.feedback-details {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.feedback-details h5 {
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.feedback-details .table {
+    background-color: white;
+    border-radius: 8px;
+}
+
+.feedback-details .badge {
+    font-size: 0.9rem;
+    padding: 0.4rem 0.8rem;
+}
+
+.feedback-details .badge.bg-success {
+    background-color: #28a745 !important;
+}
+
+.feedback-details .badge.bg-danger {
+    background-color: #dc3545 !important;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const exerciseData = {{ exercise.get_content()|tojson|safe }};
+    const sentenceContainer = document.getElementById('sentence-container');
+    const wordBank = document.getElementById('word-bank');
+    const answersInput = document.getElementById('answers-input');
+    
+    // Initialiser le tableau des réponses
+    let answers = new Array(exerciseData.words.length).fill('');
+    let usedWords = new Set();
+    
+    // Fonction pour mélanger un tableau
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+    
+    // Créer les blancs dans la phrase
+    const sentence = exerciseData.sentence;
+    const lines = sentence.split(/\r?\n/);
+    let html = '';
+    let blankIndex = 0;
+    
+    lines.forEach((line, lineIndex) => {
+        const parts = line.split('___');
+        parts.forEach((part, partIndex) => {
+            html += part;
+            if (partIndex < parts.length - 1) {
+                html += `<span class="blank" data-index="${blankIndex}"></span>`;
+                blankIndex++;
+            }
+        });
+        if (lineIndex < lines.length - 1) {
+            html += '<br><br>';
+        }
+    });
+    
+    sentenceContainer.innerHTML = html;
+    
+    // Mélanger les mots avant de les afficher
+    const shuffledWords = shuffleArray([...exerciseData.words]);
+    
+    // Créer la banque de mots
+    shuffledWords.forEach((word, index) => {
+        const wordElement = document.createElement('div');
+        wordElement.className = 'word';
+        wordElement.textContent = word;
+        wordElement.setAttribute('data-word', word);
+        wordElement.setAttribute('data-index', index);
+        
+        wordElement.addEventListener('click', function() {
+            if (!this.classList.contains('used')) {
+                const selectedWord = this.textContent;
+                const emptyBlankIndex = answers.findIndex(a => a === '');
+                
+                if (emptyBlankIndex !== -1) {
+                    // Remplir le premier blanc disponible
+                    const blank = document.querySelector(`.blank[data-index="${emptyBlankIndex}"]`);
+                    blank.textContent = selectedWord;
+                    blank.classList.add('filled');
+                    
+                    // Marquer le mot comme utilisé
+                    this.classList.add('used');
+                    usedWords.add(selectedWord);
+                    
+                    // Mettre à jour le tableau des réponses
+                    answers[emptyBlankIndex] = selectedWord;
+                    answersInput.value = JSON.stringify(answers);
+                }
+            } else {
+                // Permettre de désélectionner un mot
+                const selectedWord = this.textContent;
+                const index = answers.indexOf(selectedWord);
+                
+                if (index !== -1) {
+                    // Vider le blanc correspondant
+                    const blank = document.querySelector(`.blank[data-index="${index}"]`);
+                    blank.textContent = '';
+                    blank.classList.remove('filled');
+                    
+                    // Démarquer le mot comme utilisé
+                    this.classList.remove('used');
+                    usedWords.delete(selectedWord);
+                    
+                    // Mettre à jour le tableau des réponses
+                    answers[index] = '';
+                    answersInput.value = JSON.stringify(answers);
+                }
+            }
+        });
+        
+        wordBank.appendChild(wordElement);
+    });
+    
+    // Initialiser l'input caché
+    answersInput.value = JSON.stringify(answers);
+    
+    // Valider le formulaire avant soumission
+    document.getElementById('exercise-form').addEventListener('submit', function(e) {
+        const emptyAnswers = answers.some(a => a === '');
+        if (emptyAnswers) {
+            e.preventDefault();
+            alert('Veuillez remplir tous les blancs avant de soumettre.');
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statistiques du cours - {{ course.title }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-primary">
+        <div class="container">
+            <a class="navbar-brand text-white" href="{{ url_for('home') }}">Classe Numérique</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="{{ url_for('manage_course', course_id=course.id) }}">
+                            <i class="bi bi-arrow-left"></i> Retour au cours
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <span class="nav-link text-white">{{ current_user.name }}</span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="{{ url_for('logout') }}">Déconnexion</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h2>{{ course.title }} - Statistiques</h2>
+                        <p class="text-muted">
+                            Matière: {{ course.subject }}<br>
+                            Classe: {{ course.class_ref.name }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Moyenne de la classe par exercice</h5>
+                        <canvas id="classAverageChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Taux de participation</h5>
+                        <canvas id="participationChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Détails par élève</h5>
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Élève</th>
+                                        {% for exercise in exercises %}
+                                        <th>
+                                            {{ exercise.title }}
+                                            <br>
+                                            <small class="text-muted">{{ exercise.type }}</small>
+                                        </th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for student_id, student_data in stats.items() %}
+                                    <tr>
+                                        <td>{{ student_data.name }}</td>
+                                        {% for exercise in exercises %}
+                                        <td>
+                                            {% if student_data.exercises[exercise.id] %}
+                                            <div class="stats-cell">
+                                                <div class="score-badge {% if student_data.exercises[exercise.id].best_score >= 80 %}bg-success{% elif student_data.exercises[exercise.id].best_score >= 50 %}bg-warning{% else %}bg-danger{% endif %} text-white rounded p-2 mb-2">
+                                                    Meilleur score: {{ "%.1f"|format(student_data.exercises[exercise.id].best_score) }}%
+                                                </div>
+                                                <div class="text-muted small">
+                                                    <div class="mb-1">Dernier score: {{ "%.1f"|format(student_data.exercises[exercise.id].last_score) }}%</div>
+                                                    <div class="mb-1">Moyenne: {{ "%.1f"|format(student_data.exercises[exercise.id].average_score) }}%</div>
+                                                    <div class="mb-1">Tentatives: {{ student_data.exercises[exercise.id].attempts_count }}</div>
+                                                    <div>Dernière tentative:<br>{{ student_data.exercises[exercise.id].last_attempt.strftime('%d/%m/%Y %H:%M') }}</div>
+                                                </div>
+                                            </div>
+                                            {% else %}
+                                            <span class="text-muted">Non tenté</span>
+                                            {% endif %}
+                                        </td>
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Statistiques par exercice</h5>
+                        {% for exercise in exercises %}
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">{{ exercise.title }}</h5>
+                                <small class="text-muted">Type : {{ exercise.type }}</small>
+                            </div>
+                            <div class="card-body">
+                                <h6>Statistiques globales :</h6>
+                                {% set stats = get_exercise_stats(exercise.id) %}
+                                <ul class="list-unstyled">
+                                    <li>Nombre de tentatives : {{ stats.attempts }}</li>
+                                    <li>Score moyen : {{ "%.1f"|format(stats.average_score) }}%</li>
+                                    <li>Meilleur score : {{ "%.1f"|format(stats.best_score) }}%</li>
+                                </ul>
+                                
+                                <h6 class="mt-4">Tentatives par étudiant :</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Étudiant</th>
+                                                <th>Nombre de tentatives</th>
+                                                <th>Meilleur score</th>
+                                                <th>Dernier score</th>
+                                                <th>Date dernière tentative</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for student_stat in get_student_stats(exercise.id) %}
+                                            <tr>
+                                                <td>{{ student_stat.student_name }}</td>
+                                                <td>{{ student_stat.attempts }}</td>
+                                                <td>{{ "%.1f"|format(student_stat.best_score) }}%</td>
+                                                <td>{{ "%.1f"|format(student_stat.last_score) }}%</td>
+                                                <td>{{ student_stat.last_attempt_date.strftime('%d/%m/%Y %H:%M') if student_stat.last_attempt_date else 'N/A' }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                {% if exercise.type == 'pairs' %}
+                                <h6 class="mt-4">Statistiques spécifiques aux paires :</h6>
+                                <ul class="list-unstyled">
+                                    <li>Nombre moyen de tentatives avant réussite : {{ "%.1f"|format(stats.avg_attempts_before_success) }}</li>
+                                    <li>Paires les plus difficiles :
+                                        <ul>
+                                            {% for pair in stats.difficult_pairs %}
+                                            <li>{{ pair.left }} → {{ pair.right }} ({{ "%.1f"|format(pair.success_rate) }}% de réussite)</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </li>
+                                </ul>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Convertir les données Jinja en variables JavaScript
+            const exerciseLabels = JSON.parse('{{ exercises|map(attribute="title")|list|tojson|safe }}');
+            const exerciseIds = JSON.parse('{{ exercises|map(attribute="id")|list|tojson|safe }}');
+            const statsData = JSON.parse('{{ stats|tojson|safe }}');
+            
+            // Calculer les moyennes de classe
+            const classAverages = exerciseLabels.map((_, index) => {
+                const exerciseId = exerciseIds[index];
+                let totalScore = 0;
+                let totalStudents = 0;
+                
+                Object.values(statsData).forEach(studentData => {
+                    const stats = studentData.exercises[exerciseId];
+                    if (stats && stats.average_score !== undefined) {
+                        totalScore += stats.average_score;
+                        totalStudents++;
+                    }
+                });
+                
+                return totalStudents > 0 ? (totalScore / totalStudents).toFixed(1) : 0;
+            });
+
+            // Graphique des moyennes de classe
+            new Chart(document.getElementById('classAverageChart'), {
+                type: 'bar',
+                data: {
+                    labels: exerciseLabels,
+                    datasets: [{
+                        label: 'Moyenne de la classe (%)',
+                        data: classAverages,
+                        backgroundColor: 'rgba(13, 110, 253, 0.5)',
+                        borderColor: 'rgb(13, 110, 253)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.raw + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Calculer les données de participation
+            const participationData = exerciseLabels.map((_, index) => {
+                const exerciseId = exerciseIds[index];
+                let participatedStudents = 0;
+                const totalStudents = Object.keys(statsData).length;
+                
+                Object.values(statsData).forEach(studentData => {
+                    const studentStats = studentData.exercises[exerciseId];
+                    if (studentStats && studentStats.attempts_count > 0) {
+                        participatedStudents++;
+                    }
+                });
+                
+                return ((participatedStudents / totalStudents) * 100).toFixed(1);
+            });
+
+            // Graphique de participation
+            new Chart(document.getElementById('participationChart'), {
+                type: 'bar',
+                data: {
+                    labels: exerciseLabels,
+                    datasets: [{
+                        label: 'Taux de participation (%)',
+                        data: participationData,
+                        backgroundColor: 'rgba(40, 167, 69, 0.5)',
+                        borderColor: 'rgb(40, 167, 69)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.raw + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

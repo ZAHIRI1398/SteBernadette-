@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+.exercise-container {
+    padding: 20px;
+}
+
+.item-container {
+    border: 2px solid #ddd;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.item-container:hover {
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0,123,255,0.3);
+}
+
+.item-container.selected {
+    background-color: #e3f2fd;
+    border-color: #007bff;
+}
+
+.item-container.matched {
+    background-color: #d4edda;
+    border-color: #28a745;
+}
+
+.item-image {
+    max-height: 150px;
+    display: block;
+    margin: 0 auto 10px auto;
+}
+
+.item-text {
+    text-align: center;
+    font-size: 1.1em;
+}
+
+#connection-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+</style>
+
+<div class="exercise-container">
+    <h3 class="mb-4">{{ exercise.title }}</h3>
+
+    <form id="exercise-form" method="POST" action="{{ url_for('submit_answer', exercise_id=exercise.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="pairs" id="pairs-input">
+
+        <div class="position-relative">
+            <canvas id="connection-canvas"></canvas>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h4 class="mb-3">Éléments à associer</h4>
+                    {% for i in range(exercise_content.items_left|length) %}
+                    <div class="item-container" data-side="left" data-index="{{ i }}">
+                        {% if exercise_content.items_left_images[i] %}
+                        <img src="{{ url_for('static', filename='uploads/' + exercise_content.items_left_images[i]) }}" 
+                             class="item-image" alt="Image {{ i+1 }}">
+                        {% endif %}
+                        <div class="item-text">{{ exercise_content.items_left[i] }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="col-md-6">
+                    <h4 class="mb-3">Réponses possibles</h4>
+                    <div id="right-items">
+                        {% set shuffled_indices = range(exercise_content.items_right|length)|list %}
+                        {{ shuffled_indices.sort(reverse=True) }}
+                        {% for i in shuffled_indices %}
+                        <div class="item-container" data-side="right" data-index="{{ i }}">
+                            {% if exercise_content.items_right_images[i] %}
+                            <img src="{{ url_for('static', filename='uploads/' + exercise_content.items_right_images[i]) }}" 
+                                 class="item-image" alt="Image {{ i+1 }}">
+                            {% endif %}
+                            <div class="item-text">{{ exercise_content.items_right[i] }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <button type="submit" class="btn btn-primary">Vérifier les réponses</button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const canvas = document.getElementById('connection-canvas');
+    const ctx = canvas.getContext('2d');
+    const form = document.getElementById('exercise-form');
+    const pairsInput = document.getElementById('pairs-input');
+    
+    let selectedItem = null;
+    let pairs = [];
+
+    // Mélanger les éléments de droite au chargement
+    const rightContainer = document.getElementById('right-items');
+    const rightItems = Array.from(rightContainer.children);
+    for (let i = rightItems.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        rightContainer.appendChild(rightItems[j]);
+    }
+
+    // Redimensionner le canvas
+    function resizeCanvas() {
+        const container = canvas.parentElement;
+        canvas.width = container.offsetWidth;
+        canvas.height = container.offsetHeight;
+        canvas.style.width = container.offsetWidth + 'px';
+        canvas.style.height = container.offsetHeight + 'px';
+        drawConnections();
+    }
+
+    // Obtenir les coordonnées réelles d'un élément
+    function getElementCenter(element) {
+        const rect = element.getBoundingClientRect();
+        const containerRect = canvas.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        
+        return {
+            x: rect.left + rect.width / 2 - containerRect.left,
+            y: rect.top + rect.height / 2 - containerRect.top + scrollTop
+        };
+    }
+
+    // Dessiner les connexions
+    function drawConnections() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#28a745';
+        ctx.lineWidth = 2;
+
+        pairs.forEach(pair => {
+            const leftElement = document.querySelector(`[data-side="left"][data-index="${pair.left}"]`);
+            const rightElement = document.querySelector(`[data-side="right"][data-index="${pair.right}"]`);
+
+            if (leftElement && rightElement) {
+                const start = getElementCenter(leftElement);
+                const end = getElementCenter(rightElement);
+
+                // Dessiner la ligne
+                ctx.beginPath();
+                ctx.moveTo(start.x, start.y);
+                ctx.lineTo(end.x, end.y);
+                ctx.stroke();
+
+                // Dessiner la flèche
+                const angle = Math.atan2(end.y - start.y, end.x - start.x);
+                const arrowLength = 15;
+
+                ctx.beginPath();
+                ctx.moveTo(end.x, end.y);
+                ctx.lineTo(
+                    end.x - arrowLength * Math.cos(angle - Math.PI / 6),
+                    end.y - arrowLength * Math.sin(angle - Math.PI / 6)
+                );
+                ctx.moveTo(end.x, end.y);
+                ctx.lineTo(
+                    end.x - arrowLength * Math.cos(angle + Math.PI / 6),
+                    end.y - arrowLength * Math.sin(angle + Math.PI / 6)
+                );
+                ctx.stroke();
+            }
+        });
+    }
+
+    // Gérer les clics sur les éléments
+    document.querySelectorAll('.item-container').forEach(item => {
+        item.addEventListener('click', function() {
+            const side = this.dataset.side;
+            const index = parseInt(this.dataset.index);
+
+            if (side === 'left') {
+                // Désélectionner si déjà sélectionné
+                if (selectedItem && selectedItem.side === 'left' && selectedItem.index === index) {
+                    selectedItem = null;
+                } else {
+                    selectedItem = { side: 'left', index: index };
+                }
+                updateDisplay();
+            } else if (side === 'right' && selectedItem && selectedItem.side === 'left') {
+                // Créer une nouvelle association
+                const leftIndex = selectedItem.index;
+                const rightIndex = index;
+
+                // Supprimer les anciennes associations
+                pairs = pairs.filter(p => p.left !== leftIndex && p.right !== rightIndex);
+
+                // Ajouter la nouvelle association
+                pairs.push({ left: leftIndex, right: rightIndex });
+                selectedItem = null;
+                updateDisplay();
+            }
+        });
+    });
+
+    // Mettre à jour l'affichage
+    function updateDisplay() {
+        // Réinitialiser les classes
+        document.querySelectorAll('.item-container').forEach(item => {
+            item.classList.remove('selected', 'matched');
+        });
+
+        // Afficher les associations
+        pairs.forEach(pair => {
+            document.querySelector(`[data-side="left"][data-index="${pair.left}"]`).classList.add('matched');
+            document.querySelector(`[data-side="right"][data-index="${pair.right}"]`).classList.add('matched');
+        });
+
+        // Afficher la sélection
+        if (selectedItem) {
+            document.querySelector(`[data-side="${selectedItem.side}"][data-index="${selectedItem.index}"]`)
+                .classList.add('selected');
+        }
+
+        // Mettre à jour les connexions
+        drawConnections();
+
+        // Mettre à jour l'input caché
+        pairsInput.value = JSON.stringify(pairs);
+    }
+
+    // Validation du formulaire
+    form.addEventListener('submit', function(e) {
+        const leftElements = document.querySelectorAll('[data-side="left"]');
+        if (pairs.length < leftElements.length) {
+            e.preventDefault();
+            alert('Veuillez associer tous les éléments avant de soumettre.');
+        }
+    });
+
+    // Mettre à jour le canvas lors du scroll
+    window.addEventListener('scroll', drawConnections);
+
+    // Initialisation
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+});
+</script>
+{% endblock %}

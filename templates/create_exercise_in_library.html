@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Créer un exercice{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Fil d'Ariane -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('teacher_dashboard') }}"><i class="fas fa-home"></i> Tableau de bord</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('exercise_library') }}"><i class="fas fa-book"></i> Bibliothèque d'exercices</a></li>
+            <li class="breadcrumb-item active">Créer un exercice</li>
+        </ol>
+    </nav>
+
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h2 class="card-title mb-0"><i class="fas fa-plus-circle"></i> Créer un nouvel exercice</h2>
+        </div>
+        <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <!-- Informations de base -->
+                <div class="mb-4">
+                    <label for="title" class="form-label">
+                        <i class="fas fa-heading"></i> Titre de l'exercice
+                    </label>
+                    <input type="text" class="form-control form-control-lg" id="title" name="title" required>
+                    <div class="form-text text-muted">
+                        Donnez un titre clair et descriptif à votre exercice
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="description" class="form-label">
+                        <i class="fas fa-align-left"></i> Description
+                    </label>
+                    <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    <div class="form-text text-muted">
+                        Une brève description de l'exercice (optionnel)
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="exercise_type" class="form-label">
+                        <i class="fas fa-tasks"></i> Type d'exercice
+                    </label>
+                    <select class="form-select form-select-lg" id="exercise_type" name="exercise_type" required>
+                        <option value="">Sélectionnez un type</option>
+                        <option value="qcm">QCM</option>
+                        <option value="text">Réponse libre</option>
+                        <option value="file">Fichier à rendre</option>
+                    </select>
+                    <div class="form-text text-muted">
+                        Choisissez le type d'exercice que vous souhaitez créer
+                    </div>
+                </div>
+
+                <!-- Champs spécifiques au QCM -->
+                <div id="qcm-fields" style="display: none;">
+                    <div class="mb-4">
+                        <label for="question" class="form-label">
+                            <i class="fas fa-question-circle"></i> Question
+                        </label>
+                        <textarea class="form-control" id="question" name="question" rows="2"></textarea>
+                    </div>
+
+                    <div class="mb-4" id="choices-container">
+                        <label class="form-label">
+                            <i class="fas fa-list"></i> Choix de réponses
+                        </label>
+                        <div class="choices">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" name="choices[]" placeholder="Option 1">
+                                <div class="input-group-text">
+                                    <input type="radio" name="correct_answer" value="0" class="form-check-input mt-0">
+                                </div>
+                            </div>
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" name="choices[]" placeholder="Option 2">
+                                <div class="input-group-text">
+                                    <input type="radio" name="correct_answer" value="1" class="form-check-input mt-0">
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary mt-2" onclick="addChoice()">
+                            <i class="fas fa-plus"></i> Ajouter une option
+                        </button>
+                        <div class="form-text text-muted">
+                            Ajoutez les options et sélectionnez la bonne réponse
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Champs spécifiques à la réponse libre -->
+                <div id="text-fields" style="display: none;">
+                    <div class="mb-4">
+                        <label for="text_question" class="form-label">
+                            <i class="fas fa-question-circle"></i> Question
+                        </label>
+                        <textarea class="form-control" id="text_question" name="text_question" rows="2"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label for="expected_answer" class="form-label">
+                            <i class="fas fa-check"></i> Réponse attendue
+                        </label>
+                        <textarea class="form-control" id="expected_answer" name="expected_answer" rows="2"></textarea>
+                        <div class="form-text text-muted">
+                            La réponse que vous attendez de l'élève (pour la correction)
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Champs spécifiques au fichier à rendre -->
+                <div id="file-fields" style="display: none;">
+                    <div class="mb-4">
+                        <label for="file_instructions" class="form-label">
+                            <i class="fas fa-info-circle"></i> Instructions
+                        </label>
+                        <textarea class="form-control" id="file_instructions" name="file_instructions" rows="3"></textarea>
+                        <div class="form-text text-muted">
+                            Instructions pour le fichier à rendre (format attendu, contraintes, etc.)
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Champ pour l'image -->
+                <div class="mb-4">
+                    <label for="image" class="form-label">
+                        <i class="fas fa-image"></i> Image (optionnel)
+                    </label>
+                    <input type="file" class="form-control" id="image" name="image" accept="image/*">
+                    <div class="form-text text-muted">
+                        Vous pouvez ajouter une image à votre exercice (formats acceptés : PNG, JPG, JPEG, GIF)
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <a href="{{ url_for('exercise_library') }}" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-arrow-left"></i> Retour
+                    </a>
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-save"></i> Créer l'exercice
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const exerciseType = document.getElementById('exercise_type');
+    
+    // Initialiser les champs au chargement
+    toggleExerciseFields(exerciseType.value);
+    
+    // Ajouter l'écouteur d'événements pour le changement de type
+    exerciseType.addEventListener('change', function() {
+        toggleExerciseFields(this.value);
+    });
+});
+
+function toggleExerciseFields(type) {
+    // Cacher tous les champs spécifiques
+    document.getElementById('qcm-fields').style.display = 'none';
+    document.getElementById('text-fields').style.display = 'none';
+    document.getElementById('file-fields').style.display = 'none';
+    
+    // Afficher les champs correspondant au type sélectionné
+    if (type === 'qcm') {
+        document.getElementById('qcm-fields').style.display = 'block';
+    } else if (type === 'text') {
+        document.getElementById('text-fields').style.display = 'block';
+    } else if (type === 'file') {
+        document.getElementById('file-fields').style.display = 'block';
+    }
+}
+
+function addChoice() {
+    const choicesDiv = document.querySelector('.choices');
+    const choiceCount = choicesDiv.children.length;
+    
+    const newChoiceDiv = document.createElement('div');
+    newChoiceDiv.className = 'input-group mb-2';
+    
+    newChoiceDiv.innerHTML = `
+        <input type="text" class="form-control" name="choices[]" placeholder="Option ${choiceCount + 1}">
+        <div class="input-group-text">
+            <input type="radio" name="correct_answer" value="${choiceCount}" class="form-check-input mt-0">
+        </div>
+        <button type="button" class="btn btn-outline-danger" onclick="removeChoice(this)">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    
+    choicesDiv.appendChild(newChoiceDiv);
+}
+
+function removeChoice(button) {
+    const choiceDiv = button.parentElement;
+    const choicesDiv = choiceDiv.parentElement;
+    
+    if (choicesDiv.children.length > 2) {
+        choiceDiv.remove();
+        updateChoiceNumbers();
+    }
+}
+
+function updateChoiceNumbers() {
+    const choices = document.querySelectorAll('.choices .input-group');
+    choices.forEach((choice, index) => {
+        const input = choice.querySelector('input[type="text"]');
+        const radio = choice.querySelector('input[type="radio"]');
+        input.placeholder = `Option ${index + 1}`;
+        radio.value = index;
+    });
+}
+</script>
+{% endblock %}

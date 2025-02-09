@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+.exercise-container {
+    max-width: 1200px;
+    margin: 40px auto;
+    padding: 20px;
+}
+
+.exercise-title {
+    font-size: 1.8rem;
+    color: #333;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.question-container {
+    background-color: #f8f9fa;
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 30px;
+}
+
+.question-text {
+    font-size: 1.2rem;
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.options-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.option-item {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    background-color: white;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.option-item:hover {
+    border-color: #6f42c1;
+    background-color: #f3f0ff;
+}
+
+.option-item.selected {
+    border-color: #6f42c1;
+    background-color: #f3f0ff;
+}
+
+.option-radio {
+    margin-right: 15px;
+}
+
+.option-text {
+    font-size: 1.1rem;
+    color: #495057;
+}
+
+.submit-button {
+    display: block;
+    margin: 30px auto 0;
+    padding: 15px 50px;
+    font-size: 1.2rem;
+    background-color: #6f42c1;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.submit-button:hover {
+    background-color: #5a32a3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.results-container {
+    margin-top: 40px;
+}
+
+.score-section {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.score-section h2 {
+    font-size: 2.5rem;
+    color: #6f42c1;
+    margin-bottom: 10px;
+}
+
+.score-section p {
+    font-size: 1.2rem;
+    color: #495057;
+}
+
+.feedback-details {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.feedback-details h5 {
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.feedback-item {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.feedback-item .question {
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.feedback-item .answer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.feedback-item .answer.correct {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.feedback-item .answer.incorrect {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.badge {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.badge-success {
+    background-color: #28a745;
+    color: white;
+}
+
+.badge-danger {
+    background-color: #dc3545;
+    color: white;
+}
+</style>
+
+<div class="exercise-container">
+    <h3 class="exercise-title">{{ exercise.title }}</h3>
+    
+    <form id="exercise-form" method="POST" action="{{ url_for('submit_answer', exercise_id=exercise.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="answers" id="answers-input">
+        
+        {% set content = exercise.get_content() %}
+        {% for question_index, question in content.questions|enumerate %}
+        <div class="question-container">
+            <div class="question-text">{{ question }}</div>
+            
+            <div class="options-container">
+                {% for option_index, option in content.options[question_index]|enumerate %}
+                <div class="option-item" onclick="selectOption(this, {{ question_index }}, {{ option_index }})">
+                    <input type="radio" name="question_{{ question_index }}" value="{{ option_index }}" class="option-radio">
+                    <span class="option-text">{{ option }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        
+        <button type="submit" class="submit-button">Vérifier</button>
+    </form>
+    
+    {% if last_attempt %}
+    <div class="results-container">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Résultats de votre dernière tentative</h4>
+            </div>
+            <div class="card-body">
+                <div class="score-section">
+                    <h2>{{ "%.1f"|format(last_attempt.score) }}%</h2>
+                    {% set feedback = last_attempt.feedback|from_json %}
+                    <p>Questions correctes : {{ feedback.correct_count }} sur {{ feedback.total_questions }}</p>
+                </div>
+                
+                <div class="feedback-details">
+                    <h5>Détails par question</h5>
+                    {% for detail in feedback.details %}
+                    <div class="feedback-item">
+                        <div class="question">Question {{ detail.question_index + 1 }}</div>
+                        <div class="answer {% if detail.is_correct %}correct{% else %}incorrect{% endif %}">
+                            <span>Votre réponse : {{ content.options[detail.question_index][detail.user_answer] }}</span>
+                            {% if not detail.is_correct %}
+                            <span>Réponse correcte : {{ content.options[detail.question_index][detail.correct_answer] }}</span>
+                            {% endif %}
+                            <span class="badge {% if detail.is_correct %}badge-success{% else %}badge-danger{% endif %}">
+                                {% if detail.is_correct %}Correct{% else %}Incorrect{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+let selectedAnswers = new Array({{ content.questions|length }}).fill(-1);
+
+function selectOption(optionElement, questionIndex, optionIndex) {
+    // Désélectionner toutes les options de cette question
+    const questionContainer = optionElement.parentElement;
+    questionContainer.querySelectorAll('.option-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    
+    // Sélectionner l'option cliquée
+    optionElement.classList.add('selected');
+    
+    // Mettre à jour le tableau des réponses
+    selectedAnswers[questionIndex] = optionIndex;
+    
+    // Mettre à jour l'input caché
+    document.getElementById('answers-input').value = JSON.stringify(selectedAnswers);
+    
+    // Cocher le radio button
+    optionElement.querySelector('input[type="radio"]').checked = true;
+}
+
+// Initialiser l'input caché avec un tableau vide
+document.getElementById('answers-input').value = JSON.stringify(selectedAnswers);
+</script>
+{% endblock %}

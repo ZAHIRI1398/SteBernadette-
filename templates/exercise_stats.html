@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Statistiques - {{ exercise.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Statistiques de l'exercice : {{ exercise.title }}</h2>
+    
+    <!-- Vue d'ensemble -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Vue d'ensemble</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h5>Tentatives totales</h5>
+                        <h2 class="text-primary">{{ stats.total_attempts }}</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h5>Note moyenne</h5>
+                        <h2 class="text-success">{{ "%.1f"|format(stats.average_score) }}%</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h5>Taux de complétion</h5>
+                        <h2 class="text-info">{{ "%.1f"|format(stats.completion_rate) }}%</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h5>Taux de réussite</h5>
+                        <h2 class="text-warning">{{ "%.1f"|format(stats.success_rate) }}%</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Statistiques par élève -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h4 class="mb-0">Statistiques par élève</h4>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Élève</th>
+                            <th>Nombre de tentatives</th>
+                            <th>Meilleur score</th>
+                            <th>Score moyen</th>
+                            <th>Dernier score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student_stat in stats.student_stats %}
+                        <tr>
+                            <td>{{ student_stat.student.name }}</td>
+                            <td>{{ student_stat.attempts }}</td>
+                            <td>
+                                <span class="badge {% if student_stat.best_score >= 70 %}bg-success{% else %}bg-danger{% endif %}">
+                                    {{ "%.1f"|format(student_stat.best_score) }}%
+                                </span>
+                            </td>
+                            <td>{{ "%.1f"|format(student_stat.average_score) }}%</td>
+                            <td>
+                                <span class="badge {% if student_stat.last_score >= 70 %}bg-success{% else %}bg-danger{% endif %}">
+                                    {{ "%.1f"|format(student_stat.last_score) }}%
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    {% if course_id and attempts %}
+    <!-- Historique des tentatives -->
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <h4 class="mb-0">Historique des tentatives</h4>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Élève</th>
+                            <th>Date</th>
+                            <th>Score</th>
+                            <th>Réponses</th>
+                            <th>Feedback</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for attempt in student_attempts %}
+                        <tr>
+                            <td>{{ attempt.student_user.full_name }}</td>
+                            <td>{{ attempt.timestamp.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                <span class="badge {% if attempt.score >= 70 %}bg-success{% else %}bg-danger{% endif %}">
+                                    {{ "%.1f"|format(attempt.score) }}%
+                                </span>
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-info" onclick="showAnswers('{{ attempt.id }}')">
+                                    <i class="fas fa-eye"></i> Voir les réponses
+                                </button>
+                                
+                                {% if current_user.is_teacher %}
+                                <button type="button" class="btn btn-sm btn-primary" onclick="addFeedback('{{ attempt.id }}')">
+                                    <i class="fas fa-comment"></i> Ajouter un feedback
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal pour ajouter un feedback -->
+<div class="modal fade" id="addFeedbackModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Ajouter un feedback</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="feedbackForm">
+                    <input type="hidden" id="attemptId" name="attemptId">
+                    <div class="mb-3">
+                        <label for="feedback" class="form-label">Feedback</label>
+                        <textarea class="form-control" id="feedback" name="feedback" rows="3" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function addFeedback(attemptId) {
+    document.getElementById('attemptId').value = attemptId;
+    new bootstrap.Modal(document.getElementById('addFeedbackModal')).show();
+}
+
+document.getElementById('feedbackForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const attemptId = document.getElementById('attemptId').value;
+    const feedback = document.getElementById('feedback').value;
+    
+    fetch(`/exercise/attempt/${attemptId}/feedback`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ feedback: feedback })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Erreur lors de l\'enregistrement du feedback');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Erreur lors de l\'enregistrement du feedback');
+    });
+});
+</script>
+{% endblock %}
