@@ -1997,21 +1997,6 @@ def from_json_filter(value):
 app.jinja_env.filters['enumerate'] = enumerate_filter
 app.jinja_env.filters['from_json'] = from_json_filter
 
-def init_admin():
-    """Initialise le compte administrateur s'il n'existe pas"""
-    admin = User.query.filter_by(email='admin@example.com').first()
-    if not admin:
-        # Créer l'administrateur
-        admin = User(
-            username='admin',
-            name='Admin',
-            email='admin@example.com',
-            role='admin'
-        )
-        admin.set_password('admin')
-        db.session.add(admin)
-        db.session.commit()
-        print('Compte administrateur créé avec succès.')
 def get_file_icon(filename):
     """Retourne l'icône Font Awesome appropriée selon le type de fichier."""
     ext = filename.lower().split('.')[-1] if '.' in filename else ''
@@ -2036,8 +2021,11 @@ def get_file_icon(filename):
     
     return icons.get(ext, 'fa-file')
 
-# Ajouter le filtre à l'environnement Jinja2
-app.jinja_env.filters['get_file_icon'] = get_file_icon        
+app.jinja_env.filters['get_file_icon'] = get_file_icon
+
+# Initialise le compte administrateur s'il n'existe pas
+def init_admin():
+           
 
 if __name__ == '__main__':
     with app.app_context():
