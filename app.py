@@ -35,7 +35,16 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Configuration de l'extension pour les fichiers
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx'}
 
-# Après les imports et la configuration...
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# Initialisation des extensions
+db.init_app(app)
+csrf = CSRFProtect(app)
+migrate = Migrate(app, db)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
 # Fonctions pour les filtres Jinja2
 def enumerate_filter(iterable, start=0):
@@ -77,18 +86,6 @@ def get_file_icon(filename):
 app.jinja_env.filters['enumerate'] = enumerate_filter
 app.jinja_env.filters['from_json'] = from_json_filter
 app.jinja_env.filters['get_file_icon'] = get_file_icon
-
-# Le reste du code...
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# Initialisation des extensions
-db.init_app(app)
-csrf = CSRFProtect(app)
-migrate = Migrate(app, db)
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
 
 # Décorateurs
 def teacher_required(f):
