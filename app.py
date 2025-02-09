@@ -1964,6 +1964,24 @@ def view_feedback(exercise_id, attempt_id):
     
     return render_template(template, exercise=exercise, attempt=attempt, answers=answers, feedback=feedback)
 
+@app.route('/course/<int:course_id>/file/<int:file_id>/download')
+@login_required
+def download_course_file(course_id, file_id):
+    course = Course.query.get_or_404(course_id)
+    file = CourseFile.query.get_or_404(file_id)
+    
+    if file.course_id != course.id:
+        flash('Fichier non trouvé.', 'error')
+        return redirect(url_for('view_course', course_id=course_id))
+    
+    # Vérifier que l'utilisateur a accès au cours
+    if current_user.role != 'teacher' and not any(c.id == course.class_id for c in current_user.classes_enrolled):
+        flash('Accès non autorisé.', 'error')
+        return redirect(url_for('index'))
+    
+    uploads_dir = os.path.join(app.root_path, 'uploads')
+    return send_from_directory(uploads_dir, file.filename, as_attachment=True, download_name=file.original_filename)
+
 def enumerate_filter(iterable, start=0):
     return enumerate(iterable, start=start)
 
