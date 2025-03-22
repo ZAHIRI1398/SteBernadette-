@@ -1,0 +1,225 @@
+{% set content = exercise.get_content() %}
+{% if content and content.sentence and content.words %}
+    <form id="exerciseForm" method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="fill-in-blanks-container">
+            <div class="card">
+                <div class="card-body">
+                    <div class="sentence-container mb-4">
+                        {% set sentences = content.sentence.split('\r\n') %}
+                        {% for sentence in sentences %}
+                            <p class="sentence mb-3">{{ sentence|replace('___', '<span class="blank" data-index="' ~ loop.index0 ~ '"></span>')|safe }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div class="words-container">
+                        <h5 class="mb-3">Mots à placer :</h5>
+                        <div class="words-list" id="wordsList">
+                            {% for word in content.words %}
+                                <span class="word-badge" draggable="true" data-word="{{ word }}">{{ word }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-4">
+                <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                    Valider mes réponses
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <style>
+    .fill-in-blanks-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .sentence {
+        font-size: 1.1rem;
+        line-height: 1.6;
+        margin-bottom: 1rem;
+    }
+
+    .blank {
+        display: inline-block;
+        width: 100px;
+        height: 30px;
+        border: 2px dashed #ccc;
+        border-radius: 4px;
+        margin: 0 5px;
+        vertical-align: middle;
+        background-color: #f8f9fa;
+        transition: all 0.2s;
+    }
+
+    .blank.drag-over {
+        border-color: #2196f3;
+        background-color: #e3f2fd;
+    }
+
+    .blank.filled {
+        border-style: solid;
+        border-color: #4caf50;
+        background-color: #f1f8e9;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 10px;
+    }
+
+    .words-container {
+        background-color: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 8px;
+    }
+
+    .words-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .word-badge {
+        display: inline-block;
+        padding: 6px 12px;
+        background-color: white;
+        border: 1px solid #dee2e6;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        color: #495057;
+        cursor: grab;
+        transition: all 0.2s;
+        user-select: none;
+    }
+
+    .word-badge:hover {
+        background-color: #e9ecef;
+        transform: translateY(-2px);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .word-badge.dragging {
+        opacity: 0.5;
+        cursor: grabbing;
+    }
+
+    .word-badge.placed {
+        display: none;
+    }
+    </style>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const wordsList = document.getElementById('wordsList');
+        const words = document.querySelectorAll('.word-badge');
+        const blanks = document.querySelectorAll('.blank');
+        const form = document.getElementById('exerciseForm');
+        let draggingWord = null;
+
+        // Pour chaque mot
+        words.forEach(word => {
+            word.addEventListener('dragstart', function(e) {
+                draggingWord = word;
+                word.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', word.dataset.word);
+            });
+
+            word.addEventListener('dragend', function() {
+                word.classList.remove('dragging');
+                draggingWord = null;
+            });
+        });
+
+        // Pour chaque espace vide
+        blanks.forEach(blank => {
+            blank.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                if (!blank.classList.contains('filled')) {
+                    blank.classList.add('drag-over');
+                }
+            });
+
+            blank.addEventListener('dragleave', function() {
+                blank.classList.remove('drag-over');
+            });
+
+            blank.addEventListener('drop', function(e) {
+                e.preventDefault();
+                blank.classList.remove('drag-over');
+                
+                if (!blank.classList.contains('filled') && draggingWord) {
+                    const word = e.dataTransfer.getData('text/plain');
+                    blank.textContent = word;
+                    blank.classList.add('filled');
+                    draggingWord.classList.add('placed');
+                    updateAnswers();
+                }
+            });
+
+            // Double-clic pour retirer un mot
+            blank.addEventListener('dblclick', function() {
+                if (blank.classList.contains('filled')) {
+                    const word = blank.textContent;
+                    const wordBadge = Array.from(words).find(w => w.dataset.word === word);
+                    if (wordBadge) {
+                        wordBadge.classList.remove('placed');
+                    }
+                    blank.textContent = '';
+                    blank.classList.remove('filled');
+                    updateAnswers();
+                }
+            });
+        });
+
+        // Fonction pour mettre à jour les réponses
+        function updateAnswers() {
+            const answers = {};
+            blanks.forEach((b, index) => {
+                if (b.classList.contains('filled')) {
+                    answers[index] = b.textContent;
+                }
+            });
+            
+            let answersInput = form.querySelector('input[name="answers"]');
+            if (!answersInput) {
+                answersInput = document.createElement('input');
+                answersInput.type = 'hidden';
+                answersInput.name = 'answers';
+                form.appendChild(answersInput);
+            }
+            answersInput.value = JSON.stringify(answers);
+
+            // Activer/désactiver le bouton selon si tous les espaces sont remplis
+            const submitBtn = document.getElementById('submitBtn');
+            const allFilled = Array.from(blanks).every(b => b.classList.contains('filled'));
+            submitBtn.disabled = !allFilled;
+            if (allFilled) {
+                submitBtn.classList.remove('btn-secondary');
+                submitBtn.classList.add('btn-primary');
+            } else {
+                submitBtn.classList.remove('btn-primary');
+                submitBtn.classList.add('btn-secondary');
+            }
+        }
+
+        // Initialiser l'état du bouton
+        updateAnswers();
+
+        // Empêcher la soumission si tous les espaces ne sont pas remplis
+        form.addEventListener('submit', function(e) {
+            const allFilled = Array.from(blanks).every(b => b.classList.contains('filled'));
+            if (!allFilled) {
+                e.preventDefault();
+                alert('Veuillez remplir tous les espaces avant de valider.');
+            }
+        });
+    });
+    </script>
+{% else %}
+    <div class="alert alert-warning">
+        Cet exercice n'a pas encore de contenu défini.
+    </div>
+{% endif %}

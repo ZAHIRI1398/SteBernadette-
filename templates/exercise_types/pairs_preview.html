@@ -1,0 +1,235 @@
+{% set content = exercise.get_content() %}
+{% if content and content.items_left %}
+    {% if current_user.is_teacher %}
+    <!-- Debug info -->
+    <div class="alert alert-info">
+        <h5>Debug Info</h5>
+        <pre>{{ content | tojson(indent=2) }}</pre>
+        
+        <h5>Image URLs</h5>
+        <ul>
+        {% for image in content.items_left_images %}
+            <li>
+                {{ url_for('static', filename='uploads/' + image) }}
+                <br>
+                <img src="{{ url_for('static', filename='uploads/' + image) }}" style="max-width: 200px; border: 2px solid blue;">
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    <form id="exerciseForm" method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="pairs-container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h4 class="mb-4">Images à associer</h4>
+                    <div class="items-left">
+                        {% for item in content.items_left %}
+                            <div class="card mb-3 item-left" data-index="{{ loop.index0 }}">
+                                <div class="card-body text-center">
+                                    {% if content.items_left_images[loop.index0] %}
+                                        <img src="{{ url_for('static', filename='uploads/' + content.items_left_images[loop.index0]) }}" 
+                                             class="img-fluid mb-3 exercise-image" alt="Image {{ loop.index0 }}">
+                                    {% endif %}
+                                    <p class="mb-0">{{ item }}</p>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h4 class="mb-4">Fractions correspondantes</h4>
+                    <div class="items-right">
+                        {% for item in content.items_right %}
+                            <div class="card mb-3 item-right" data-index="{{ loop.index0 }}">
+                                <div class="card-body text-center">
+                                    {% if content.items_right_images[loop.index0] %}
+                                        <img src="{{ url_for('static', filename='uploads/' + content.items_right_images[loop.index0]) }}" 
+                                             class="img-fluid mb-3 exercise-image" alt="Image">
+                                    {% endif %}
+                                    <p class="mb-0 h4">{{ item }}</p>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-4 mb-4">
+                <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
+                    Valider mes réponses
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <style>
+    .pairs-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .item-left, .item-right {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 1.5rem;
+        border: 1px solid #ddd; /* Ajout d'une bordure visible */
+        min-height: 100px; /* Hauteur minimale */
+    }
+
+    .item-left:hover, .item-right:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    .item-selected {
+        border: 2px solid #007bff;
+        background-color: #f8f9fa;
+    }
+
+    .item-matched {
+        border: 2px solid #28a745;
+        background-color: #e9f7ef;
+        pointer-events: none;
+    }
+
+    .exercise-image {
+        max-height: 200px;
+        width: 100%; /* Forcer la largeur à 100% */
+        margin: 0 auto;
+        display: block;
+        object-fit: contain;
+        border: 1px dashed red; /* Bordure de débogage */
+    }
+
+    .card {
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        min-height: 150px; /* Hauteur minimale */
+    }
+
+    .card-body {
+        padding: 1.5rem;
+        display: flex; /* Utiliser flexbox */
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .h4 {
+        font-size: 1.5rem;
+        margin: 0;
+    }
+
+    .btn-primary {
+        padding: 0.75rem 2rem;
+        font-size: 1.1rem;
+    }
+
+    .btn-primary:disabled {
+        background-color: #6c757d;
+        border-color: #6c757d;
+    }
+    </style>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('exerciseForm');
+        const submitBtn = document.getElementById('submitBtn');
+        let selectedLeft = null;
+        let selectedRight = null;
+        const matches = {};
+        
+        // Fonction pour gérer la sélection des éléments
+        function handleSelection(element, side) {
+            if (element.classList.contains('item-matched')) return;
+            
+            const items = document.querySelectorAll(`.item-${side}`);
+            items.forEach(item => item.classList.remove('item-selected'));
+            element.classList.add('item-selected');
+            
+            if (side === 'left') {
+                selectedLeft = element;
+            } else {
+                selectedRight = element;
+            }
+            
+            // Vérifier si on peut faire une paire
+            if (selectedLeft && selectedRight) {
+                const leftIndex = selectedLeft.dataset.index;
+                const rightIndex = selectedRight.dataset.index;
+                
+                // Enregistrer la paire
+                matches[leftIndex] = rightIndex;
+                
+                // Marquer les éléments comme appariés
+                selectedLeft.classList.remove('item-selected');
+                selectedRight.classList.remove('item-selected');
+                selectedLeft.classList.add('item-matched');
+                selectedRight.classList.add('item-matched');
+                
+                // Réinitialiser la sélection
+                selectedLeft = null;
+                selectedRight = null;
+                
+                // Vérifier si toutes les paires sont faites
+                updateSubmitButton();
+            }
+        }
+        
+        // Ajouter les écouteurs d'événements pour les éléments de gauche
+        document.querySelectorAll('.item-left').forEach(item => {
+            item.addEventListener('click', function() {
+                handleSelection(this, 'left');
+            });
+        });
+        
+        // Ajouter les écouteurs d'événements pour les éléments de droite
+        document.querySelectorAll('.item-right').forEach(item => {
+            item.addEventListener('click', function() {
+                handleSelection(this, 'right');
+            });
+        });
+        
+        // Mettre à jour l'état du bouton de soumission
+        function updateSubmitButton() {
+            const totalItems = document.querySelectorAll('.item-left').length;
+            const matchedItems = document.querySelectorAll('.item-matched.item-left').length;
+            submitBtn.disabled = matchedItems < totalItems;
+            
+            if (!submitBtn.disabled) {
+                submitBtn.classList.remove('btn-secondary');
+                submitBtn.classList.add('btn-primary');
+            } else {
+                submitBtn.classList.remove('btn-primary');
+                submitBtn.classList.add('btn-secondary');
+            }
+        }
+        
+        // Gérer la soumission du formulaire
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Créer un champ caché pour les réponses
+            let answersInput = form.querySelector('input[name="answers"]');
+            if (!answersInput) {
+                answersInput = document.createElement('input');
+                answersInput.type = 'hidden';
+                answersInput.name = 'answers';
+                form.appendChild(answersInput);
+            }
+            answersInput.value = JSON.stringify(matches);
+            
+            // Soumettre le formulaire
+            form.submit();
+        });
+    });
+    </script>
+{% else %}
+    <div class="alert alert-warning">
+        Cet exercice n'a pas encore de contenu défini.
+    </div>
+{% endif %}

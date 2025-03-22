@@ -180,11 +180,20 @@ class Exercise(db.Model):
         return f'<Exercise {self.title}>'
     
     def get_content(self):
-        """Récupère le contenu de l'exercice sous forme de dictionnaire"""
-        if isinstance(self.content, str):
-            return json.loads(self.content)
-        return self.content
-
+        """Récupère le contenu de l'exercice sous forme de dictionnaire."""
+        try:
+            print(f"\n[DEBUG] get_content pour exercice {self.id}")
+            print(f"[DEBUG] Content brut: {self.content}")
+            if not self.content:
+                print("[DEBUG] Pas de contenu, retourne dict vide")
+                return {}
+            content = json.loads(self.content)
+            print(f"[DEBUG] Content parsé: {content}")
+            return content
+        except json.JSONDecodeError as e:
+            print(f"[ERROR] Erreur de décodage JSON: {str(e)}")
+            return {}
+    
     def set_content(self, content):
         """Enregistre le contenu de l'exercice"""
         if isinstance(content, dict):
@@ -307,6 +316,7 @@ class ExerciseAttempt(db.Model):
     score = db.Column(db.Float)
     answers = db.Column(db.Text)  # Stocké en JSON
     feedback = db.Column(db.Text)  # Stocké en JSON
+    completed = db.Column(db.Boolean, default=True)  # Par défaut True car une tentative est considérée comme complétée
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relations avec les paramètres overlaps pour éviter les avertissements
@@ -315,7 +325,7 @@ class ExerciseAttempt(db.Model):
     course_ref = db.relationship('Course', backref=db.backref('exercise_attempts', lazy=True))
     
     def get_feedback(self):
-        """Récupère le feedback formaté de la tentative."""
+        """Récupères le feedback formaté de la tentative."""
         if not self.feedback:
             return None
             

@@ -3,21 +3,21 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
-from datetime import datetime
 import os
 import time
 from functools import wraps
-from models import db, User, Class, Course, Exercise, ExerciseAttempt, CourseFile, course_exercise
+from models import db, User, Class, Course, Exercise, ExerciseAttempt, CourseFile, course_exercise, student_class_association
 import json
 import random
 import string
+from datetime import datetime, timedelta
 import logging
 import unicodedata
 from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, MultipleFileField
 from wtforms.validators import DataRequired
-from flask_wtf.csrf import CSRFProtect, generate_csrf
 
 # Configuration du logging
 logging.basicConfig(level=logging.DEBUG)
@@ -58,11 +58,14 @@ def from_json_filter(value):
     except (json.JSONDecodeError, TypeError):
         return value
 
+def tojson_filter(value, indent=None):
+    return json.dumps(value, indent=indent, ensure_ascii=False)
+
 def get_file_icon(filename):
-    """Retourne l'icône Font Awesome appropriée selon le type de fichier."""
-    ext = filename.lower().split('.')[-1] if '.' in filename else ''
+    """Retourne l'icône Font Awesome appropriée en fonction de l'extension du fichier"""
+    extension = filename.lower().split('.')[-1] if '.' in filename else ''
     
-    icons = {
+    icon_mapping = {
         'pdf': 'fa-file-pdf',
         'doc': 'fa-file-word',
         'docx': 'fa-file-word',
@@ -77,15 +80,17 @@ def get_file_icon(filename):
         'gif': 'fa-file-image',
         'zip': 'fa-file-archive',
         'rar': 'fa-file-archive',
-        '7z': 'fa-file-archive'
+        '7z': 'fa-file-archive',
     }
     
-    return icons.get(ext, 'fa-file')
+    return icon_mapping.get(extension, 'fa-file')  # fa-file est l'icône par défaut
+
+app.jinja_env.globals.update(get_file_icon=get_file_icon)
 
 # Enregistrement des filtres Jinja2
 app.jinja_env.filters['enumerate'] = enumerate_filter
 app.jinja_env.filters['from_json'] = from_json_filter
-app.jinja_env.filters['get_file_icon'] = get_file_icon
+app.jinja_env.filters['tojson'] = tojson_filter
 
 # Décorateurs
 def teacher_required(f):
@@ -374,568 +379,153 @@ def remove_student(class_id, student_id):
 
 @app.route('/exercise-library')
 @login_required
-@teacher_required
 def exercise_library():
-    # Créer un formulaire vide juste pour le jeton CSRF
-    class EmptyForm(FlaskForm):
-        pass
+    # Récupérer les paramètres de filtrage
+    search_query = request.args.get('search', '')
+    exercise_type = request.args.get('type', '')
+    subject = request.args.get('subject', '')
+    level = request.args.get('level', '')
+
+    # Construire la requête de base
+    query = Exercise.query
+
+    # Appliquer les filtres
+    if search_query:
+        search = f"%{search_query}%"
+        query = query.filter(
+            db.or_(
+                Exercise.title.ilike(search),
+                Exercise.description.ilike(search)
+            )
+        )
     
-    form = EmptyForm()
-    exercises = Exercise.query.all()
-    return render_template('exercise_library.html', 
+    if exercise_type:
+        query = query.filter(Exercise.exercise_type == exercise_type)
+    
+    # Exécuter la requête
+    exercises = query.all()
+
+    # Debug: afficher le nombre d'exercices trouvés
+    app.logger.info(f"Nombre d'exercices trouvés : {len(exercises)}")
+    for ex in exercises:
+        app.logger.info(f"Exercice : {ex.title} (type: {ex.exercise_type})")
+
+    return render_template('exercise_library.html',
                          exercises=exercises,
-                         form=form)
+                         exercise_types=Exercise.EXERCISE_TYPES,
+                         search_query=search_query,
+                         selected_type=exercise_type,
+                         selected_subject=subject,
+                         selected_level=level)
 
 @app.route('/exercise/<int:exercise_id>')
 @login_required
 def view_exercise(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
-    print(f"Exercise content: {exercise.content}")
-    print(f"Exercise type: {exercise.exercise_type}")
     
-    last_attempt = None
-    last_attempts = None
-    if current_user.is_authenticated:
-        if exercise.exercise_type == 'file':
-            # Pour les exercices de type fichier, récupérer toutes les tentatives
-            last_attempts = ExerciseAttempt.query.filter_by(
-                student_id=current_user.id,
-                exercise_id=exercise_id
-            ).order_by(ExerciseAttempt.created_at.desc()).all()
-        else:
-            # Pour les autres types, récupérer seulement la dernière tentative
-            last_attempt = ExerciseAttempt.query.filter_by(
-                student_id=current_user.id,
-                exercise_id=exercise_id
-            ).order_by(ExerciseAttempt.created_at.desc()).first()
+    # Vérifier si l'élève a accès à l'exercice via ses cours
+    student_courses = Course.query.join(
+        course_exercise,
+        (course_exercise.c.course_id == Course.id) & 
+        (course_exercise.c.exercise_id == exercise_id)
+    ).join(
+        Class,
+        Class.id == Course.class_id
+    ).join(
+        student_class_association,
+        (student_class_association.c.class_id == Class.id) &
+        (student_class_association.c.student_id == current_user.id)
+    ).all()
     
-    # Vérifier que l'utilisateur a accès à cet exercice
-    if not current_user.is_teacher:
-        course = Course.query.join(course_exercise).filter(course_exercise.c.exercise_id == exercise_id).first()
-        if not course or not current_user.is_enrolled(course.class_id):
-            flash("Vous n'avez pas accès à cet exercice.", 'error')
-            return redirect(url_for('student_classes'))
-    
-    # Récupérer la dernière tentative de l'étudiant pour cet exercice
-    last_attempt = None
-    if not current_user.is_teacher:
-        last_attempt = ExerciseAttempt.query.filter_by(
-            student_id=current_user.id,
-            exercise_id=exercise_id
-        ).order_by(ExerciseAttempt.created_at.desc()).first()
-    
-    # Choisir le template en fonction du type d'exercice
-    if exercise.exercise_type == 'qcm':
-        return render_template('view_qcm_exercise.html', exercise=exercise, last_attempt=last_attempt)
-    elif exercise.exercise_type == 'text':
-        return render_template('view_text_exercise.html', exercise=exercise, last_attempt=last_attempt)
-    elif exercise.exercise_type == 'file':
-        return render_template('view_file_exercise.html', exercise=exercise, last_attempt=last_attempt)
-    elif exercise.exercise_type == 'drag_and_drop':
-        return render_template('view_drag_and_drop_exercise.html', exercise=exercise, last_attempt=last_attempt)
-    elif exercise.exercise_type == 'word_search':
-        return render_template('view_word_search_exercise.html', exercise=exercise, last_attempt=last_attempt)
-    elif exercise.exercise_type == 'pairs':
-        exercise_content = json.loads(exercise.content) if isinstance(exercise.content, str) else exercise.content
-        return render_template('view_pairs_exercise.html', exercise=exercise, exercise_content=exercise_content, last_attempt=last_attempt)
-    else:
-        flash('Type d\'exercice non supporté.', 'error')
+    if not student_courses and not current_user.is_teacher:
+        flash("Vous n'avez pas accès à cet exercice.", 'error')
         return redirect(url_for('index'))
 
-@app.route('/exercise/<int:exercise_id>/submit', methods=['POST'])
-@login_required
-def submit_answer(exercise_id):
-    exercise = Exercise.query.get_or_404(exercise_id)
-    
-    # Récupérer le cours associé à l'exercice
-    course = Course.query.join(course_exercise).filter(
-        course_exercise.c.exercise_id == exercise_id
-    ).first()
-    
-    if not course:
-        flash("Cet exercice n'est associé à aucun cours.", 'error')
-        return redirect(url_for('exercise_library'))
-    
+    course = student_courses[0] if student_courses else None
+
+    # Déboguer le contenu de l'exercice
+    content = exercise.get_content()
+    app.logger.debug(f"[DEBUG] Content pour exercice {exercise_id}")
+    app.logger.debug(f"[DEBUG] Content brut: {exercise.content}")
+    app.logger.debug(f"[DEBUG] Content parsé: {content}")
+    app.logger.debug(f"[DEBUG] Type d'exercice: {exercise.exercise_type}")
     if exercise.exercise_type == 'pairs':
-        try:
-            # Récupérer les paires soumises
-            pairs_json = request.form.get('pairs')
-            if not pairs_json:
-                flash('Veuillez associer des éléments avant de soumettre.', 'error')
-                return redirect(url_for('view_exercise', exercise_id=exercise_id))
-            
-            pairs = json.loads(pairs_json)
-            app.logger.info('Paires reçues: %s', pairs)
-            
-            # Récupérer le contenu de l'exercice
-            exercise_content = exercise.get_content()
-            
-            # Calculer le score
-            score = 0
-            feedback = []
-            
-            # Vérifier chaque paire
-            for pair in pairs:
-                left_index = pair.get('left')
-                right_index = pair.get('right')
-                
-                if left_index == right_index:  # Les indices correspondent = bonne réponse
-                    score += 1
-                    feedback.append({
-                        'left': exercise_content['items_left'][left_index],
-                        'right': exercise_content['items_right'][right_index],
-                        'is_correct': True
-                    })
-                else:
-                    feedback.append({
-                        'left': exercise_content['items_left'][left_index],
-                        'right': exercise_content['items_right'][right_index],
-                        'is_correct': False,
-                        'correct_right': exercise_content['items_right'][left_index]
-                    })
-            
-            # Calculer le pourcentage
-            total_pairs = len(exercise_content['items_left'])
-            score_percentage = (score / total_pairs) * 100 if total_pairs > 0 else 0
-            
-            # Créer une nouvelle tentative
-            attempt = ExerciseAttempt(
-                student_id=current_user.id,
-                exercise_id=exercise_id,
-                score=score_percentage,
-                course_id=course.id,
-                answers=pairs_json,
-                feedback=json.dumps({
-                    'pairs': feedback,
-                    'score': score,
-                    'total': total_pairs
-                })
-            )
-            
-            db.session.add(attempt)
-            db.session.commit()
-            
-            flash(f'Exercice soumis ! Score : {score_percentage:.1f}%', 'success')
-            return redirect(url_for('view_feedback', exercise_id=exercise_id, attempt_id=attempt.id))
-            
-        except Exception as e:
-            app.logger.error('Erreur lors de la soumission : %s', str(e))
-            flash('Une erreur est survenue lors de la soumission.', 'error')
-            return redirect(url_for('view_exercise', exercise_id=exercise_id))
-    
-    elif exercise.exercise_type == 'word_search':
-        try:
-            # Récupérer les réponses de l'utilisateur
-            user_answers = request.form.get('answers', '').strip().split('\n')
-            user_answers = [word.strip().lower() for word in user_answers if word.strip()]
-            
-            # Récupérer le contenu de l'exercice
-            content = json.loads(exercise.content) if isinstance(exercise.content, str) else exercise.content
-            words = [word.lower() for word in content.get('words', [])]
-            
-            # Calculer le score
-            correct_words = [word for word in user_answers if word in words]
-            score = (len(correct_words) / len(words)) * 100 if words else 0
-            
-            # Générer le feedback
-            feedback = {
-                'found_words': correct_words,
-                'total_words': len(words),
-                'correct_count': len(correct_words),
-                'missing_words': [word for word in words if word not in correct_words]
-            }
-            
-            # Créer une nouvelle tentative
-            attempt = ExerciseAttempt(
-                student_id=current_user.id,
-                exercise_id=exercise_id,
-                score=score,
-                course_id=course.id,
-                answers=json.dumps(user_answers),
-                feedback=json.dumps(feedback)
-            )
-            
-            db.session.add(attempt)
-            db.session.commit()
-            
-            flash(f'Exercice soumis ! Score : {score:.1f}%', 'success')
-            return redirect(url_for('view_feedback', exercise_id=exercise_id, attempt_id=attempt.id))
-            
-        except Exception as e:
-            print(f"Erreur lors de la soumission : {str(e)}")  # Pour le débogage
-            flash('Une erreur est survenue lors de la soumission.', 'error')
-            return redirect(url_for('view_exercise', exercise_id=exercise_id))
-            
-    elif exercise.exercise_type == 'qcm':
-        try:
-            # Récupérer les réponses de l'utilisateur
-            user_answers = json.loads(request.form.get('answers', '[]'))
-            
-            # Récupérer les réponses correctes
-            content = json.loads(exercise.content) if isinstance(exercise.content, str) else exercise.content
-            correct_answers = content.get('correct_answers', [])
-            
-            # Vérifier que nous avons le bon nombre de réponses
-            total_questions = len(content.get('questions', []))
-            if len(user_answers) != total_questions:
-                flash('Veuillez répondre à toutes les questions.', 'warning')
-                return redirect(url_for('view_exercise', exercise_id=exercise_id))
-            
-            # Calculer le score
-            correct_count = sum(1 for ua, ca in zip(user_answers, correct_answers) if ua == ca)
-            score = (correct_count / total_questions) * 100
-            
-            # Créer un feedback détaillé
-            feedback = {
-                'total_questions': total_questions,
-                'correct_count': correct_count,
-                'details': []
-            }
-            
-            # Ajouter les détails pour chaque question
-            for i, (user_answer, correct_answer) in enumerate(zip(user_answers, correct_answers)):
-                is_correct = user_answer == correct_answer
-                feedback['details'].append({
-                    'question_index': i,
-                    'user_answer': user_answer,
-                    'correct_answer': correct_answer,
-                    'is_correct': is_correct
-                })
-            
-            # Créer une nouvelle tentative
-            attempt = ExerciseAttempt(
-                student_id=current_user.id,
-                exercise_id=exercise_id,
-                score=score,
-                course_id=course.id,
-                answers=json.dumps(user_answers),  # Convertir en JSON
-                feedback=json.dumps(feedback)  # Convertir en JSON
-            )
-            
-            db.session.add(attempt)
-            db.session.commit()
-            
-            flash(f'Exercice soumis ! Score : {score:.1f}%', 'success')
-            return redirect(url_for('view_feedback', exercise_id=exercise_id, attempt_id=attempt.id))
-            
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            flash('Format de réponse invalide.', 'error')
-            return redirect(url_for('view_exercise', exercise_id=exercise_id))
-            
-    elif exercise.exercise_type == 'drag_and_drop':
-        try:
-            # Récupérer les réponses de l'utilisateur
-            user_answers = json.loads(request.form.get('answers', '[]'))
-            
-            # Récupérer le contenu de l'exercice
-            content = json.loads(exercise.content) if isinstance(exercise.content, str) else exercise.content
-            words = content.get('words', [])
-            
-            # Vérifier que nous avons le bon nombre de réponses
-            if len(user_answers) != len(words):
-                flash('Veuillez remplir tous les blancs.', 'warning')
-                return redirect(url_for('view_exercise', exercise_id=exercise_id))
-            
-            # Calculer le score
-            correct_count = 0
-            feedback = {
-                'total_blanks': len(words),
-                'correct_answers': 0,
-                'details': []
-            }
-            
-            # Vérifier chaque réponse
-            for i, (user_answer, correct_word) in enumerate(zip(user_answers, words)):
-                is_correct = user_answer == correct_word
-                if is_correct:
-                    correct_count += 1
-                    feedback['correct_answers'] += 1
-                
-                feedback['details'].append({
-                    'position': i + 1,
-                    'user_answer': user_answer,
-                    'is_correct': is_correct
-                })
-            
-            score = (correct_count / len(words)) * 100
-            
-            # Créer une nouvelle tentative
-            attempt = ExerciseAttempt(
-                student_id=current_user.id,
-                exercise_id=exercise_id,
-                score=score,
-                course_id=course.id,
-                answers=json.dumps(user_answers),  # Convertir en JSON
-                feedback=json.dumps(feedback)  # Convertir en JSON
-            )
-            
-            db.session.add(attempt)
-            db.session.commit()
-            
-            flash(f'Exercice soumis ! Score : {score:.1f}%', 'success')
-            return redirect(url_for('view_feedback', exercise_id=exercise_id, attempt_id=attempt.id))
-            
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            flash('Format de réponse invalide.', 'error')
-            return redirect(url_for('view_exercise', exercise_id=exercise_id))
-    
-    elif exercise.exercise_type == 'file':
-        try:
-            # Récupérer les réponses de l'utilisateur
-            user_answers = request.form.get('answers', '').strip().split('\n')
-            user_answers = [word.strip().lower() for word in user_answers if word.strip()]
-            
-            # Récupérer le contenu de l'exercice
-            content = json.loads(exercise.content) if isinstance(exercise.content, str) else exercise.content
-            words = [word.lower() for word in content.get('words', [])]
-            
-            # Calculer le score
-            correct_words = [word for word in user_answers if word in words]
-            score = (len(correct_words) / len(words)) * 100 if words else 0
-            
-            # Générer le feedback
-            feedback = {
-                'found_words': correct_words,
-                'total_words': len(words),
-                'correct_count': len(correct_words),
-                'missing_words': [word for word in words if word not in correct_words]
-            }
-            
-            # Créer une nouvelle tentative
-            attempt = ExerciseAttempt(
-                student_id=current_user.id,
-                exercise_id=exercise_id,
-                score=score,
-                course_id=course.id,
-                answers=json.dumps(user_answers),
-                feedback=json.dumps(feedback)
-            )
-            
-            db.session.add(attempt)
-            db.session.commit()
-            
-            flash(f'Exercice soumis ! Score : {score:.1f}%', 'success')
-            return redirect(url_for('view_feedback', exercise_id=exercise_id, attempt_id=attempt.id))
-            
-        except Exception as e:
-            print(f"Erreur lors de la soumission : {str(e)}")  # Pour le débogage
-            flash('Une erreur est survenue lors de la soumission.', 'error')
-            return redirect(url_for('view_exercise', exercise_id=exercise_id))
-            
-    elif exercise.exercise_type == 'pairs':
-        try:
-            # Récupérer les réponses de l'utilisateur
-            user_pairs = json.loads(request.form.get('pairs', '[]'))
-            
-            # Récupérer le contenu de l'exercice
-            content = json.loads(exercise.content) if isinstance(exercise.content, str) else exercise.content
-            items_left = content.get('items_left', [])
-            items_right = content.get('items_right', [])
-            
-            # Vérifier les paires correctes
-            correct_pairs = 0
-            total_pairs = len(items_left)
-            
-            for pair in user_pairs:
-                left_index = pair.get('left')
-                right_index = pair.get('right')
-                if left_index is not None and right_index is not None:
-                    if left_index < len(items_left) and right_index < len(items_right):
-                        if left_index == right_index:  # Les indices correspondent aux bonnes paires
-                            correct_pairs += 1
-            
-            # Calculer le score
-            score = (correct_pairs / total_pairs) * 100 if total_pairs > 0 else 0
-            
-            # Créer le feedback
-            feedback = {
-                'correct_pairs': correct_pairs,
-                'total_pairs': total_pairs,
-                'details': user_pairs
-            }
-            
-            # Créer une nouvelle tentative
-            attempt = ExerciseAttempt(
-                student_id=current_user.id,
-                exercise_id=exercise_id,
-                course_id=course.id,
-                score=score,
-                answers=json.dumps(user_pairs),
-                feedback=json.dumps(feedback)
-            )
-            
-            db.session.add(attempt)
-            db.session.commit()
-            
-            flash(f'Exercice soumis ! Score : {score:.1f}%', 'success')
-            return redirect(url_for('view_feedback', exercise_id=exercise_id, attempt_id=attempt.id))
-            
-        except Exception as e:
-            print(f"Erreur lors de la soumission : {str(e)}")  # Pour le débogage
-            flash('Une erreur est survenue lors de la soumission.', 'error')
-            return redirect(url_for('view_exercise', exercise_id=exercise_id))
-            
-    # Pour les autres types d'exercices
-    attempt = ExerciseAttempt(
-        student_id=current_user.id,
-        exercise_id=exercise_id,
-        course_id=course.id,
-        answers={},
-        score=None
-    )
-    
-    db.session.add(attempt)
-    db.session.commit()
-    
-    flash('Réponse soumise avec succès !', 'success')
-    
-    if exercise.course:
-        return redirect(url_for('view_course', course_id=exercise.course.id))
-    else:
-        return redirect(url_for('exercise_library'))
+        app.logger.debug(f"[DEBUG] Images gauche: {content.get('items_left_images', [])}")
+        app.logger.debug(f"[DEBUG] Images droite: {content.get('items_right_images', [])}")
+        
+        # Générer le HTML directement pour déboguer
+        template = render_template('exercise_types/pairs_preview.html', 
+                                exercise=exercise, 
+                                course=course)
+        app.logger.debug("[DEBUG] HTML généré:")
+        app.logger.debug(template)
+
+    return render_template('view_exercise.html', 
+                         exercise=exercise, 
+                         course=course)
+
+@app.route('/exercise/<int:exercise_id>/teacher')
+@login_required
+def view_exercise_teacher(exercise_id):
+    if not current_user.is_teacher:
+        flash("Accès non autorisé.", "error")
+        return redirect(url_for('index'))
+        
+    exercise = Exercise.query.get_or_404(exercise_id)
+    return render_template('view_exercise_teacher.html', exercise=exercise)
 
 @app.route('/exercise/<int:exercise_id>/edit', methods=['GET', 'POST'])
 @login_required
-@teacher_required
 def edit_exercise(exercise_id):
+    if not current_user.is_teacher:
+        flash("Accès non autorisé.", "error")
+        return redirect(url_for('index'))
+        
     exercise = Exercise.query.get_or_404(exercise_id)
-    
-    # Vérifier les permissions
     if exercise.teacher_id != current_user.id:
-        teaching_course_ids = [c.id for c in current_user.courses]
-        exercise_course_ids = [c.id for c in exercise.courses]
-        if not any(course_id in teaching_course_ids for course_id in exercise_course_ids):
-            flash("Vous n'avez pas la permission de modifier cet exercice.", 'error')
-            return redirect(url_for('exercise_library'))
-
+        flash("Vous n'êtes pas autorisé à modifier cet exercice.", "error")
+        return redirect(url_for('index'))
+        
     if request.method == 'POST':
         title = request.form.get('title')
         description = request.form.get('description')
         exercise_type = request.form.get('exercise_type')
+        content = {}
 
-        # Gérer l'upload d'une nouvelle image
-        if 'exercise_image' in request.files:
-            file = request.files['exercise_image']
-            if file and file.filename and allowed_file(file.filename):
-                # Supprimer l'ancienne image si elle existe
-                if exercise.image_path:
-                    old_image_path = os.path.join(app.config['UPLOAD_FOLDER'], exercise.image_path.split('/')[-1])
-                    if os.path.exists(old_image_path):
-                        os.remove(old_image_path)
-                
-                filename = secure_filename(file.filename)
-                filename = f"{int(time.time())}_{filename}"
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(file_path)
-                exercise.image_path = f"uploads/{filename}"
-
+        # Mettre à jour les informations de base
         exercise.title = title
         exercise.description = description
         exercise.exercise_type = exercise_type
 
         # Gérer le contenu spécifique au type d'exercice
         if exercise_type == 'qcm':
-            question = request.form.get('question')
-            options = request.form.getlist('options[]')
-            correct_option = request.form.get('correct_option')
+            questions = []
+            question_count = int(request.form.get('question_count', 0))
             
-            if not all([question, options, correct_option]):
-                flash('Veuillez remplir tous les champs requis pour le QCM.', 'error')
-                return redirect(url_for('edit_exercise', exercise_id=exercise_id))
-
-            content = {
-                'question': question,
-                'options': options,
-                'correct_option': int(correct_option)
-            }
-            exercise.set_content(json.dumps(content))  # Convertir en JSON
+            for i in range(question_count):
+                question = {
+                    'question': request.form.get(f'question_{i}'),
+                    'options': request.form.getlist(f'options_{i}[]'),
+                    'correct': request.form.get(f'correct_{i}')
+                }
+                if question['question'] and question['options'] and question['correct']:
+                    questions.append(question)
             
-        elif exercise_type == 'text':
-            text_question = request.form.get('text_question')
-            if not text_question:
-                flash('Veuillez entrer une question.', 'error')
-                return redirect(url_for('edit_exercise', exercise_id=exercise_id))
-
-            exercise.set_content(json.dumps({'question': text_question}))  # Convertir en JSON
+            content['questions'] = questions
             
-        elif exercise_type == 'file':
-            file_instructions = request.form.get('file_instructions')
-            if not file_instructions:
-                flash('Veuillez entrer les instructions.', 'error')
-                return redirect(url_for('edit_exercise', exercise_id=exercise_id))
+        exercise.content = json.dumps(content)
 
-            exercise.set_content(json.dumps({'instructions': file_instructions}))  # Convertir en JSON
-        
         try:
             db.session.commit()
             flash('Exercice modifié avec succès !', 'success')
-            return redirect(url_for('exercise_library'))
+            return redirect(url_for('view_exercise', exercise_id=exercise_id))
         except Exception as e:
             db.session.rollback()
-            flash('Une erreur est survenue lors de la modification de l\'exercice.', 'error')
-            return redirect(url_for('edit_exercise', exercise_id=exercise_id))
+            flash('Une erreur est survenue lors de la modification.', 'error')
 
-    # Pour la méthode GET, afficher le formulaire d'édition
-    content = json.loads(exercise.content) if isinstance(exercise.content, str) else exercise.content  # Convertir en JSON
+    # Pour la méthode GET
+    content = exercise.get_content()
     return render_template('edit_exercise.html', exercise=exercise, content=content)
-
-@app.route('/exercise/<int:exercise_id>/delete', methods=['POST'])
-@login_required
-@teacher_required
-def delete_exercise(exercise_id):
-    exercise = Exercise.query.get_or_404(exercise_id)
-    
-    # Vérifier que l'enseignant est bien le propriétaire de l'exercice
-    if exercise.teacher_id != current_user.id:
-        flash('Vous n\'êtes pas autorisé à supprimer cet exercice.', 'error')
-        return redirect(url_for('exercise_library'))
-    
-    try:
-        # Supprimer l'image associée si elle existe
-        if exercise.image_path:
-            image_path = os.path.join(app.static_folder, exercise.image_path)
-            if os.path.exists(image_path):
-                os.remove(image_path)
-        
-        # Supprimer les tentatives associées
-        ExerciseAttempt.query.filter_by(exercise_id=exercise_id).delete()
-        
-        # Supprimer l'exercice des cours
-        exercise.courses = []
-        
-        # Supprimer l'exercice
-        db.session.delete(exercise)
-        db.session.commit()
-        
-        flash('L\'exercice a été supprimé avec succès.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash('Une erreur est survenue lors de la suppression de l\'exercice.', 'error')
-        print(f"Erreur lors de la suppression de l'exercice : {str(e)}")
-    
-    return redirect(url_for('exercise_library'))
-
-@app.route('/submit-exercise/<int:exercise_id>', methods=['POST'])
-@login_required
-def submit_exercise(exercise_id):
-    exercise = Exercise.query.get_or_404(exercise_id)
-    data = request.get_json()
-    
-    # Enregistrer la tentative
-    record_attempt(exercise_id, data)
-    
-    return jsonify({'message': 'Exercice soumis avec succès !'})
-
-@app.route('/record-attempt/<int:exercise_id>', methods=['POST'])
-@login_required
-def record_attempt(exercise_id):
-    exercise = Exercise.query.get_or_404(exercise_id)
-    data = request.get_json()
-    
-    # Enregistrer les données de la tentative
-    # TODO: Implémenter la logique d'enregistrement des tentatives
-    
-    return jsonify({'message': 'Tentative enregistrée avec succès !'})
 
 @app.route('/course/<int:course_id>')
 @login_required
@@ -1503,7 +1093,7 @@ def delete_course_file(course_id, file_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/create_exercise', methods=['GET', 'POST'])
+@app.route('/exercise/create', methods=['GET', 'POST'])
 @login_required
 @teacher_required
 def create_exercise():
@@ -1511,266 +1101,62 @@ def create_exercise():
         title = request.form.get('title')
         description = request.form.get('description')
         exercise_type = request.form.get('exercise_type')
-
-        # Traitement de l'image si elle est fournie
-        image_path = None
-        if 'image' in request.files:
-            file = request.files['image']
-            if file and file.filename:
-                if file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                    # Générer un nom de fichier sécurisé
-                    filename = secure_filename(file.filename)
-                    # Ajouter un timestamp pour éviter les doublons
-                    name, ext = os.path.splitext(filename)
-                    filename = f"{name}_{int(time.time())}{ext}"
-                    # Sauvegarder le fichier
-                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                    image_path = filename
-                else:
-                    flash('Format d\'image non supporté.', 'error')
-                    return redirect(url_for('create_exercise'))
         
-        content = {}
-        
-        if exercise_type == 'qcm':
-            questions = request.form.getlist('questions[]')
-            content['questions'] = questions
-            content['options'] = []
-            content['correct_answers'] = []
-            
-            for i in range(len(questions)):
-                options = request.form.getlist(f'options_{i+1}[]')
-                correct_answer = int(request.form.get(f'correct_answer_{i+1}', 0))
-                content['options'].append(options)
-                content['correct_answers'].append(correct_answer)
-        
-        elif exercise_type == 'drag_and_drop':
-            sentence = request.form.get('sentence')
-            words = request.form.get('words')
-            
-            if not sentence or not words:
-                flash('Veuillez remplir tous les champs requis.', 'error')
-                return redirect(url_for('create_exercise'))
-            
-            # Vérifier que le nombre de blancs correspond au nombre de mots
-            blank_count = sentence.count('___')
-            word_count = len(words.split(','))
-            
-            if blank_count != word_count:
-                flash(f'Le nombre de blancs ({blank_count}) ne correspond pas au nombre de mots ({word_count}).', 'error')
-                return redirect(url_for('create_exercise'))
-            
-            content = {
-                'sentence': sentence,
-                'words': [word.strip() for word in words.split(',')]
-            }
-        
-        elif exercise_type == 'pairs':
-            items_left = request.form.getlist('items_left[]')
-            items_right = request.form.getlist('items_right[]')
-            items_left_files = request.files.getlist('items_left_image[]')
-            items_right_files = request.files.getlist('items_right_image[]')
-            
-            if len(items_left) != len(items_right) or not items_left or not items_right:
-                flash('Veuillez fournir un nombre égal d\'éléments gauches et droits.', 'error')
-                return redirect(url_for('create_exercise'))
-            
-            # Traitement des images
-            items_left_images = []
-            items_right_images = []
-            
-            for idx, (left_file, right_file) in enumerate(zip(items_left_files, items_right_files)):
-                # Traitement image gauche
-                left_image_path = None
-                if left_file and left_file.filename:
-                    if left_file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                        filename = secure_filename(left_file.filename)
-                        name, ext = os.path.splitext(filename)
-                        filename = f"pair_left_{idx}_{int(time.time())}{ext}"
-                        left_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                        left_image_path = filename
-                items_left_images.append(left_image_path)
-                
-                # Traitement image droite
-                right_image_path = None
-                if right_file and right_file.filename:
-                    if right_file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                        filename = secure_filename(right_file.filename)
-                        name, ext = os.path.splitext(filename)
-                        filename = f"pair_right_{idx}_{int(time.time())}{ext}"
-                        right_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                        right_image_path = filename
-                items_right_images.append(right_image_path)
-            
-            content = {
-                'items_left': items_left,
-                'items_right': items_right,
-                'items_left_images': items_left_images,
-                'items_right_images': items_right_images
-            }
-        
-        elif exercise_type == 'file':
-            file_instructions = request.form.get('file_instructions')
-            if not file_instructions:
-                flash('Veuillez entrer les instructions.', 'error')
-                return redirect(url_for('create_exercise'))
-            
-            content = {
-                'instructions': file_instructions
-            }
-        
-        elif exercise_type == 'word_search':
-            # Récupérer les paramètres de la grille
-            grid_rows = int(request.form.get('grid_rows', 10))
-            grid_cols = int(request.form.get('grid_cols', 10))
-            words_input = request.form.get('word_search_words', '').strip()
-            
-            # Valider l'entrée des mots
-            if not words_input:
-                flash("Veuillez entrer au moins un mot à cacher.", 'error')
-                return redirect(url_for('create_exercise'))
-            
-            # Nettoyer et valider chaque mot
-            words = []
-            for word in words_input.split(','):
-                word = word.strip().lower()
-                if not word:
-                    continue
-                    
-                # Vérifier la longueur du mot
-                if len(word) > max(grid_rows, grid_cols):
-                    flash(f"Le mot '{word}' est trop long ({len(word)} lettres). La longueur maximale est de {max(grid_rows, grid_cols)} lettres avec la taille de grille actuelle ({grid_rows}x{grid_cols}).", 'error')
-                    return redirect(url_for('create_exercise'))
-                    
-                # Vérifier les caractères valides
-                if not word.isalpha():
-                    flash(f"Le mot '{word}' contient des caractères non autorisés. Utilisez uniquement des lettres.", 'error')
-                    return redirect(url_for('create_exercise'))
-                    
-                words.append(word)
-            
-            # Vérifier qu'il y a au moins un mot valide
-            if not words:
-                flash("Veuillez entrer au moins un mot valide à cacher.", 'error')
-                return redirect(url_for('create_exercise'))
-            
-            # Créer une grille vide
-            grid = [['' for _ in range(grid_cols)] for _ in range(grid_rows)]
-            
-            # Fonction pour vérifier si un mot peut être placé à une position donnée
-            def can_place_word(word, start_row, start_col, row_dir, col_dir):
-                row, col = start_row, start_col
-                for letter in word:
-                    if not (0 <= row < grid_rows and 0 <= col < grid_cols):
-                        return False
-                    if grid[row][col] and grid[row][col] != letter:
-                        return False
-                    row += row_dir
-                    col += col_dir
-                return True
-            
-            # Fonction pour placer un mot dans la grille
-            def place_word(word, start_row, start_col, row_dir, col_dir):
-                row, col = start_row, start_col
-                for letter in word:
-                    grid[row][col] = letter
-                    row += row_dir
-                    col += col_dir
-            
-            # Directions possibles (horizontal, vertical, diagonal)
-            directions = [
-                (0, 1),   # droite
-                (1, 0),   # bas
-                (1, 1),   # diagonal bas-droite
-                (-1, 1),  # diagonal haut-droite
-            ]
-            
-            import random
-            
-            # Essayer de placer chaque mot
-            random.shuffle(words)  # Mélanger les mots pour un placement plus varié
-            placed_words = []
-            
-            for word in words:
-                word = word.lower()
-                # Essayer plusieurs fois de placer le mot
-                placed = False
-                attempts = 0
-                max_attempts = 50
-                
-                while not placed and attempts < max_attempts:
-                    # Choisir une position et une direction aléatoires
-                    row_dir, col_dir = random.choice(directions)
-                    
-                    # Calculer les limites de départ possibles
-                    if row_dir > 0:
-                        max_start_row = grid_rows - len(word)
-                        min_start_row = 0
-                    elif row_dir < 0:
-                        max_start_row = grid_rows - 1
-                        min_start_row = len(word) - 1
-                    else:
-                        max_start_row = grid_rows - 1
-                        min_start_row = 0
-                        
-                    if col_dir > 0:
-                        max_start_col = grid_cols - len(word)
-                        min_start_col = 0
-                    elif col_dir < 0:
-                        max_start_col = grid_cols - 1
-                        min_start_col = len(word) - 1
-                    else:
-                        max_start_col = grid_cols - 1
-                        min_start_col = 0
-                    
-                    # S'assurer que les limites sont valides
-                    if max_start_row < min_start_row or max_start_col < min_start_col:
-                        attempts += 1
-                        continue
-                    
-                    start_row = random.randint(min_start_row, max_start_row)
-                    start_col = random.randint(min_start_col, max_start_col)
-                    
-                    # Vérifier si on peut placer le mot
-                    if can_place_word(word, start_row, start_col, row_dir, col_dir):
-                        place_word(word, start_row, start_col, row_dir, col_dir)
-                        placed = True
-                        placed_words.append(word)
-                    
-                    attempts += 1
-            
-            if not placed_words:
-                flash("Impossible de placer les mots dans la grille. Essayez avec une grille plus grande ou moins de mots.", 'error')
-                return redirect(url_for('create_exercise'))
-            
-            # Remplir les cases vides avec des lettres aléatoires
-            letters = 'abcdefghijklmnopqrstuvwxyz'
-            for i in range(grid_rows):
-                for j in range(grid_cols):
-                    if not grid[i][j]:
-                        grid[i][j] = random.choice(letters)
-            
-            content = {
-                'grid': grid,
-                'words': placed_words
-            }
-        
+        # Créer l'exercice
         exercise = Exercise(
             title=title,
             description=description,
             exercise_type=exercise_type,
-            content=json.dumps(content),  # Convertir en JSON
-            image_path=image_path,
             teacher_id=current_user.id
         )
+        
+        # Initialiser le contenu en fonction du type d'exercice
+        if exercise_type == 'qcm':
+            # Récupérer les questions
+            questions = []
+            i = 0
+            while f'question_{i}' in request.form:
+                question = {
+                    'question': request.form.get(f'question_{i}'),
+                    'options': request.form.getlist(f'options_{i}[]'),
+                    'correct': request.form.get(f'correct_{i}')
+                }
+                if question['question'] and question['options'] and question['correct']:
+                    questions.append(question)
+            
+            if not questions:
+                # Créer une question exemple si aucune n'est fournie
+                questions = [{
+                    'question': 'Question exemple',
+                    'options': ['Option 1', 'Option 2', 'Option 3'],
+                    'correct': 'Option 1'
+                }]
+            
+            exercise.content = json.dumps({'questions': questions})
+            
+        elif exercise_type == 'word_search':
+            words = request.form.get('words', '').split(',')
+            words = [w.strip() for w in words if w.strip()]
+            exercise.content = json.dumps({
+                'words': words,
+                'grid': []  # La grille sera générée lors de l'édition
+            })
+            
+        elif exercise_type == 'drag_and_drop':
+            items = request.form.getlist('items[]')
+            zones = request.form.getlist('zones[]')
+            exercise.content = json.dumps({
+                'elements': items,
+                'zones': zones
+            })
         
         db.session.add(exercise)
         db.session.commit()
         
         flash('Exercice créé avec succès !', 'success')
-        return redirect(url_for('exercise_library'))
+        return redirect(url_for('edit_exercise', exercise_id=exercise.id))
     
-    return render_template('create_exercise.html')
+    return render_template('create_exercise.html', exercise_types=Exercise.EXERCISE_TYPES)
 
 @app.route('/exercise/<int:exercise_id>/add_to_class', methods=['GET', 'POST'])
 @login_required
@@ -1781,18 +1167,9 @@ def add_exercise_to_class(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
     app.logger.info(f"[add_exercise_to_class] Exercice trouvé: {exercise.title}")
     
-    # Vérifier que l'utilisateur est le propriétaire de l'exercice
-    app.logger.info(f"[add_exercise_to_class] Vérification du propriétaire - Teacher ID: {exercise.teacher_id}, Current User ID: {current_user.id}")
-    if exercise.teacher_id != current_user.id:
-        app.logger.warning(f"[add_exercise_to_class] L'utilisateur {current_user.id} n'est pas le propriétaire de l'exercice {exercise_id}")
-        flash('Vous ne pouvez pas ajouter cet exercice.', 'error')
-        return redirect(url_for('exercise_library'))
-    
     # Récupérer les classes de l'enseignant
     classes = Class.query.filter_by(teacher_id=current_user.id).all()
     app.logger.info(f"[add_exercise_to_class] Nombre de classes trouvées: {len(classes)}")
-    for class_obj in classes:
-        app.logger.info(f"[add_exercise_to_class] - Classe: {class_obj.name} (ID: {class_obj.id})")
     
     if request.method == 'POST':
         app.logger.info("[add_exercise_to_class] Traitement d'une requête POST")
@@ -1888,97 +1265,134 @@ def get_class_courses_api(class_id):
         app.logger.error(f"[get_class_courses_api] Traceback: {traceback.format_exc()}")
         return jsonify({'error': f'Erreur API courses: {str(e)}'}), 500
 
-@app.route('/course/<int:course_id>/stats')
+@app.route('/exercise/<int:exercise_id>/submit', methods=['POST'])
 @login_required
-def course_stats(course_id):
-    print("\n=== DÉBUT COURSE_STATS ===")
-    print(f"[DEBUG] Statistiques pour le cours {course_id}")
-    print(f"[DEBUG] Utilisateur connecté: {current_user.username} (ID: {current_user.id})")
+def submit_exercise(exercise_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    content = exercise.get_content()
     
-    try:
-        course = Course.query.get_or_404(course_id)
+    if not content:
+        flash("Erreur: Impossible de charger le contenu de l'exercice.", 'error')
+        return redirect(url_for('view_exercise', exercise_id=exercise_id))
+
+    exercise_type = request.form.get('exercise_type')
+    score = 0
+    total = 0
+    feedback = ""
+
+    if exercise_type == 'word_search':
+        # Debug logs
+        app.logger.debug(f"[DEBUG] Form data: {request.form}")
+        app.logger.debug(f"[DEBUG] Found words raw: {request.form.get('found_words', '')}")
         
-        # Vérifier les permissions
-        if current_user.role == 'teacher' and course.class_obj.teacher_id != current_user.id:
-            print(f"[ERROR] L'utilisateur {current_user.id} n'est pas le professeur de la classe")
-            flash("Vous n'avez pas l'autorisation de voir ces statistiques.", 'error')
-            return redirect(url_for('teacher_dashboard'))
-        
-        if current_user.role == 'student' and current_user not in course.class_obj.students:
-            print(f"[ERROR] L'utilisateur {current_user.id} n'est pas inscrit dans cette classe")
-            flash("Vous n'êtes pas inscrit dans ce cours.", 'error')
-            return redirect(url_for('student_dashboard'))
-        
-        # Obtenir les statistiques appropriées selon le rôle
-        if current_user.role == 'teacher':
-            stats = course.get_class_stats()
-            print(f"[DEBUG] Statistiques du cours: {stats}")
-            return render_template('course_stats_teacher.html', course=course, stats=stats)
-        else:
-            stats = course.get_student_stats(current_user.id)
-            print(f"[DEBUG] Statistiques de l'élève: {stats}")
-            return render_template('course_stats_student.html', course=course, stats=stats)
+        found_words = set(request.form.get('found_words', '').split(','))
+        if '' in found_words:  # Retirer la chaîne vide si présente
+            found_words.remove('')
             
-    except Exception as e:
-        print(f"[ERROR] Erreur dans course_stats: {str(e)}")
-        print(f"[ERROR] Type d'erreur: {type(e)}")
-        import traceback
-        print(f"[ERROR] Traceback: {traceback.format_exc()}")
-        flash('Une erreur est survenue lors de l\'accès aux statistiques.', 'error')
-        return redirect(url_for('view_course', course_id=course_id))
-    
-    finally:
-        print("=== FIN COURSE_STATS ===\n")
+        app.logger.debug(f"[DEBUG] Found words set: {found_words}")
+        app.logger.debug(f"[DEBUG] Words to find: {set(content['words'])}")
+        
+        # Vérifier que tous les mots trouvés sont dans la liste des mots à trouver
+        invalid_words = found_words - set(content['words'])
+        missing_words = set(content['words']) - found_words
+        
+        app.logger.debug(f"[DEBUG] Invalid words: {invalid_words}")
+        app.logger.debug(f"[DEBUG] Missing words: {missing_words}")
+        
+        if invalid_words:
+            flash(f"Erreur: Certains mots trouvés ne sont pas dans la liste: {', '.join(invalid_words)}", 'error')
+            return redirect(url_for('view_exercise', exercise_id=exercise_id))
+        
+        total = len(content['words'])
+        score = len(found_words)
+        feedback = f"Vous avez trouvé {score} mot{'s' if score > 1 else ''} sur {total}."
+
+    elif exercise_type == 'pairs':
+        # Code existant pour les exercices de type pairs
+        pairs = []
+        for i in range(len(content['items_left'])):
+            left_index = request.form.get(f'left_{i}')
+            right_index = request.form.get(f'right_{i}')
+            if left_index and right_index:
+                pairs.append((int(left_index), int(right_index)))
+
+        total = len(content['items_left'])
+        for left_idx, right_idx in pairs:
+            if left_idx < len(content['items_left']) and right_idx < len(content['items_right']):
+                if left_idx == right_idx:  # Les indices correspondent car les items sont dans le même ordre
+                    score += 1
+
+        feedback = f"Vous avez trouvé {score} paire{'s' if score > 1 else ''} correcte{'s' if score > 1 else ''} sur {total}."
+
+    # Enregistrer la tentative
+    attempt = ExerciseAttempt(
+        exercise_id=exercise_id,
+        student_id=current_user.id,
+        score=score,
+        total=total,
+        course_id=request.form.get('course_id', type=int)
+    )
+    db.session.add(attempt)
+    db.session.commit()
+
+    # Afficher le feedback
+    if score == total:
+        flash(f"Félicitations ! {feedback}", 'success')
+    else:
+        flash(feedback, 'info')
+
+    return redirect(url_for('view_exercise', exercise_id=exercise_id))
 
 @app.route('/exercise/<int:exercise_id>/stats')
 @login_required
 @teacher_required
 def exercise_stats(exercise_id):
-    print("\n=== DÉBUT EXERCISE_STATS ===")
-    print(f"[DEBUG] Statistiques pour l'exercice {exercise_id}")
-    print(f"[DEBUG] Utilisateur connecté: {current_user.username} (ID: {current_user.id})")
+    exercise = Exercise.query.get_or_404(exercise_id)
+    course_id = request.args.get('course_id', type=int)
     
-    try:
-        exercise = Exercise.query.get_or_404(exercise_id)
-        
-        # Si un cours est spécifié, obtenir les stats pour ce cours
-        course_id = request.args.get('course_id', type=int)
-        if course_id:
-            course = Course.query.get_or_404(course_id)
-            if course.class_obj.teacher_id != current_user.id:
-                print(f"[ERROR] L'utilisateur {current_user.id} n'est pas le professeur de la classe")
-                flash("Vous n'avez pas l'autorisation de voir ces statistiques.", 'error')
-                return redirect(url_for('teacher_dashboard'))
-        
-        # Obtenir les statistiques
-        stats = exercise.get_stats(course_id)
-        print(f"[DEBUG] Statistiques de l'exercice: {stats}")
-        
-        # Obtenir les tentatives détaillées si un cours est spécifié
-        if course_id:
-            attempts = ExerciseAttempt.query.filter_by(
-                exercise_id=exercise_id,
-                course_id=course_id
-            ).order_by(ExerciseAttempt.created_at.desc()).all()
-        else:
-            attempts = []
-        
-        return render_template('exercise_stats.html', 
-                             exercise=exercise,
-                             stats=stats,
-                             attempts=attempts,
-                             course_id=course_id)
-            
-    except Exception as e:
-        print(f"[ERROR] Erreur dans exercise_stats: {str(e)}")
-        print(f"[ERROR] Type d'erreur: {type(e)}")
-        import traceback
-        print(f"[ERROR] Traceback: {traceback.format_exc()}")
-        flash('Une erreur est survenue lors de l\'accès aux statistiques.', 'error')
-        return redirect(url_for('exercise_library'))
+    # Vérifier que l'enseignant a le droit d'accéder à ces statistiques
+    has_access = False
     
-    finally:
-        print("=== FIN EXERCISE_STATS ===\n")
+    # Vérifier si l'enseignant est le créateur de l'exercice
+    if exercise.teacher_id == current_user.id:
+        has_access = True
+    else:
+        # Vérifier si l'exercice est utilisé dans l'une des classes de l'enseignant
+        teacher_classes = Class.query.filter_by(teacher_id=current_user.id).all()
+        for class_obj in teacher_classes:
+            for course in class_obj.courses:
+                if exercise in course.exercises:
+                    has_access = True
+                    break
+            if has_access:
+                break
+    
+    if not has_access:
+        flash("Vous n'avez pas l'autorisation de voir ces statistiques.", "error")
+        return redirect(url_for('index'))
+    
+    # Récupérer les statistiques
+    stats = exercise.get_stats(course_id)
+    
+    # Récupérer les informations du cours si spécifié
+    course = Course.query.get(course_id) if course_id else None
+    
+    # Ajouter les informations de progression pour chaque étudiant
+    student_progress = []
+    students_to_show = course.class_obj.students if course else User.query.filter_by(role='student').all()
+    
+    for student in students_to_show:
+        progress = exercise.get_student_progress(student.id)
+        student_progress.append({
+            'student': student,
+            'progress': progress
+        })
+    
+    return render_template('exercise_stats.html',
+                         exercise=exercise,
+                         course=course,
+                         stats=stats,
+                         student_progress=student_progress)
 
 @app.route('/exercise/<int:exercise_id>/feedback/<int:attempt_id>')
 @login_required
@@ -1986,26 +1400,39 @@ def view_feedback(exercise_id, attempt_id):
     exercise = Exercise.query.get_or_404(exercise_id)
     attempt = ExerciseAttempt.query.get_or_404(attempt_id)
     
-    # Vérifier que l'utilisateur a accès à cet exercice
-    if not current_user.is_teacher and attempt.student_id != current_user.id:
-        flash("Vous n'avez pas accès à ce feedback.", 'error')
-        return redirect(url_for('exercise_library'))
+    # Vérifier que l'utilisateur a le droit de voir ce feedback
+    if attempt.student_id != current_user.id and not current_user.role == 'teacher':
+        flash("Vous n'avez pas l'autorisation de voir cette tentative.", "error")
+        return redirect(url_for('index'))
+
+    # Si c'est un enseignant, vérifier qu'il enseigne dans la classe associée au cours
+    if current_user.is_teacher and attempt.course_id:
+        course = Course.query.get(attempt.course_id)
+        if course and course.teacher_id != current_user.id:
+            flash("Vous n'avez pas l'autorisation de voir cette tentative.", "error")
+            return redirect(url_for('index'))
     
-    # Choisir le template en fonction du type d'exercice
-    if exercise.exercise_type == 'word_search':
-        template = 'feedback_word_search.html'
-    else:
-        template = 'feedback.html'
+    # Convertir les réponses et le feedback en dictionnaires
+    answers = {}
+    feedback = {}
     
-    # Convertir les réponses et le feedback de JSON en objets Python
-    try:
-        answers = json.loads(attempt.answers) if attempt.answers else None
-        feedback = json.loads(attempt.feedback) if attempt.feedback else None
-    except json.JSONDecodeError:
-        answers = attempt.answers
-        feedback = attempt.feedback
+    if exercise.exercise_type == 'qcm':
+        answers_list = json.loads(attempt.answers)
+        for i, answer in enumerate(answers_list, 1):
+            answers[str(i)] = answer
+    elif exercise.exercise_type == 'pair_match':
+        pairs = json.loads(attempt.answers)
+        for i, pair in enumerate(pairs, 1):
+            answers[str(i)] = f"{pair['left']} → {pair['right']}"
     
-    return render_template(template, exercise=exercise, attempt=attempt, answers=answers, feedback=feedback)
+    if attempt.feedback:
+        feedback = json.loads(attempt.feedback)
+    
+    return render_template('feedback.html',
+                         exercise=exercise,
+                         attempt=attempt,
+                         answers=answers,
+                         feedback=feedback)
 
 @app.route('/course/<int:course_id>/file/<int:file_id>/download')
 @login_required
@@ -2025,11 +1452,188 @@ def download_course_file(course_id, file_id):
     uploads_dir = os.path.join(app.root_path, 'uploads')
     return send_from_directory(uploads_dir, file.filename, as_attachment=True, download_name=file.original_filename)
 
+@app.route('/course/<int:course_id>/get-available-exercises')
+@login_required
+def get_available_exercises(course_id):
+    """Retourne la liste des exercices disponibles pour un cours"""
+    if not current_user.role == 'teacher':
+        return jsonify({'error': 'Non autorisé'}), 403
+    
+    course = Course.query.get_or_404(course_id)
+    if course.class_obj.teacher_id != current_user.id:
+        return jsonify({'error': 'Non autorisé'}), 403
+    
+    # Récupérer tous les exercices disponibles
+    exercises = Exercise.query.all()
+    
+    # Filtrer les exercices qui ne sont pas déjà dans le cours
+    available_exercises = [
+        {'id': ex.id, 'title': ex.title, 'type': ex.exercise_type}
+        for ex in exercises if ex not in course.exercises
+    ]
+    
+    return jsonify(available_exercises)
+
+@app.route('/exercise/<int:exercise_id>/submit', methods=['POST'])
+@login_required
+def submit_answer(exercise_id):
+    print("\n=== DÉBUT SUBMIT_ANSWER ===")
+    print(f"[DEBUG] Soumission pour l'exercice {exercise_id}")
+    print(f"[DEBUG] Utilisateur: {current_user.username} (ID: {current_user.id})")
+    
+    exercise = Exercise.query.get_or_404(exercise_id)
+    course_id = request.form.get('course_id')
+    print(f"[DEBUG] Course ID: {course_id}")
+    
+    if not course_id:
+        flash('Erreur: Cours non spécifié', 'error')
+        return redirect(url_for('exercise_library'))
+    
+    # Vérifier que l'étudiant a accès à ce cours
+    course = Course.query.get_or_404(course_id)
+    if not current_user.is_enrolled(course.class_obj.id):
+        flash('Vous n\'avez pas accès à cet exercice.', 'error')
+        return redirect(url_for('exercise_library'))
+    
+    answers = {}
+    score = 0
+    feedback = []
+    
+    try:
+        if exercise.exercise_type == 'qcm':
+            content = exercise.get_content()
+            total_questions = len(content['questions'])
+            correct_answers = 0
+            
+            for i, question in enumerate(content['questions']):
+                student_answer = request.form.get(f'q{i}')
+                correct_answer = question['correct']
+                
+                is_correct = student_answer == correct_answer
+                answers[f'q{i}'] = student_answer
+                
+                if is_correct:
+                    correct_answers += 1
+                    feedback.append({
+                        'question': i + 1,
+                        'correct': True,
+                        'message': 'Bonne réponse !'
+                    })
+                else:
+                    feedback.append({
+                        'question': i + 1,
+                        'correct': False,
+                        'message': f'La réponse correcte était : {correct_answer}'
+                    })
+            
+            score = (correct_answers / total_questions) * 100 if total_questions > 0 else 0
+            
+        # Enregistrer la tentative
+        attempt = ExerciseAttempt(
+            student_id=current_user.id,
+            exercise_id=exercise_id,
+            course_id=course_id,
+            score=score,
+            answers=json.dumps(answers),
+            feedback=json.dumps(feedback)
+        )
+        
+        print(f"[DEBUG] Tentative créée - Score: {score}, Course: {course_id}")
+        
+        db.session.add(attempt)
+        db.session.commit()
+        
+        print(f"[DEBUG] Tentative enregistrée avec succès - ID: {attempt.id}")
+        print("=== FIN SUBMIT_ANSWER ===\n")
+        
+        flash(f'Exercice soumis avec succès ! Score : {score}%', 'success')
+        return redirect(url_for('view_exercise', exercise_id=exercise_id))
+        
+    except Exception as e:
+        print(f"[ERROR] Erreur dans submit_answer: {str(e)}")
+        db.session.rollback()
+        flash('Une erreur est survenue lors de la soumission.', 'error')
+        return redirect(url_for('view_exercise', exercise_id=exercise_id))
+
+@app.route('/debug/exercises')
+@login_required
+def debug_exercises():
+    if not current_user.is_teacher:
+        return "Accès non autorisé", 403
+        
+    exercises = Exercise.query.all()
+    debug_info = []
+    
+    for ex in exercises:
+        debug_info.append({
+            'id': ex.id,
+            'title': ex.title,
+            'type': ex.exercise_type,
+            'content': ex.content,
+            'parsed_content': ex.get_content()
+        })
+    
+    return render_template('debug_exercises.html', exercises=debug_info)
+
+@app.route('/exercise/<int:exercise_id>/attempt/<int:attempt_id>')
+@login_required
+def view_attempt(exercise_id, attempt_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    attempt = ExerciseAttempt.query.get_or_404(attempt_id)
+    
+    # Vérifier que l'utilisateur a le droit de voir cette tentative
+    if not current_user.is_teacher and attempt.student_id != current_user.id:
+        flash("Vous n'avez pas l'autorisation de voir cette tentative.", "error")
+        return redirect(url_for('index'))
+    
+    # Si c'est un enseignant, vérifier qu'il enseigne dans la classe associée au cours
+    if current_user.is_teacher and attempt.course_id:
+        course = Course.query.get(attempt.course_id)
+        if course and course.teacher_id != current_user.id:
+            flash("Vous n'avez pas l'autorisation de voir cette tentative.", "error")
+            return redirect(url_for('index'))
+    
+    return render_template('view_attempt.html', 
+                         exercise=exercise, 
+                         attempt=attempt)
+
+@app.route('/debug/images')
+def debug_images():
+    # Lister tous les fichiers dans le dossier uploads
+    files = []
+    upload_dir = app.config['UPLOAD_FOLDER']
+    for filename in os.listdir(upload_dir):
+        if filename.startswith('pair_left_'):
+            file_path = os.path.join(upload_dir, filename)
+            if os.path.isfile(file_path):
+                files.append({
+                    'name': filename,
+                    'url': url_for('static', filename=f'uploads/{filename}'),
+                    'size': os.path.getsize(file_path)
+                })
+    
+    return render_template('debug_images.html', files=files)
+
+def init_admin():
+    # Vérifier si l'administrateur existe déjà
+    admin = User.query.filter_by(email='admin@admin.com').first()
+    if not admin:
+        # Créer l'administrateur
+        admin = User(
+            username='admin',
+            email='admin@admin.com',
+            role='admin'
+        )
+        admin.set_password('admin')
+        
+        db.session.add(admin)
+        db.session.commit()
+        print("Administrateur créé avec succès !")
+
 if __name__ == '__main__':
     with app.app_context():
         # Créer les tables si elles n'existent pas
         db.create_all()
-        # Initialiser l'administrateur
         init_admin()
-    
+        
     app.run(debug=True)

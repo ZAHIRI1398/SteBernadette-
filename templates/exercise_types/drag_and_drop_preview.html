@@ -1,0 +1,139 @@
+{% set content = exercise.get_content() %}
+{% if content and content.items_left and content.items_right %}
+    <div class="drag-drop-container">
+        <div class="row">
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Éléments de gauche</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="draggable-items">
+                            {% for item in content.items_left %}
+                                <div class="draggable left-item" draggable="true" data-index="{{ loop.index0 }}">
+                                    {% if content.items_left_images and content.items_left_images[loop.index0] %}
+                                        <img src="{{ url_for('static', filename='uploads/' + content.items_left_images[loop.index0]) }}" 
+                                             alt="Image {{ loop.index }}"
+                                             class="img-fluid mb-2">
+                                    {% endif %}
+                                    <div class="item-text">{{ item }}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-2 d-flex align-items-center justify-content-center">
+                <div class="connection-lines"></div>
+            </div>
+
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Éléments de droite</h5>
+                    </div>
+                    <div class="card-body">
+                        {% for item in content.items_right %}
+                            <div class="drop-zone mb-3" data-index="{{ loop.index0 }}">
+                                {% if content.items_right_images and content.items_right_images[loop.index0] %}
+                                    <img src="{{ url_for('static', filename='uploads/' + content.items_right_images[loop.index0]) }}" 
+                                         alt="Image {{ loop.index }}"
+                                         class="img-fluid mb-2">
+                                {% endif %}
+                                <div class="zone-content">
+                                    <div class="item-text">{{ item }}</div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+    .draggable-items {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        min-height: 50px;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+    }
+    
+    .draggable {
+        padding: 12px;
+        background-color: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: grab;
+        user-select: none;
+        transition: all 0.2s;
+    }
+    
+    .draggable:hover {
+        background-color: #e9ecef;
+        transform: translateY(-2px);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .draggable.dragging {
+        opacity: 0.5;
+        cursor: grabbing;
+    }
+    
+    .drop-zone {
+        padding: 15px;
+        border: 2px dashed #ddd;
+        border-radius: 4px;
+        min-height: 80px;
+        transition: all 0.2s;
+        background-color: #fff;
+    }
+    
+    .drop-zone .zone-content {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .drop-zone.drag-over {
+        border-color: #2196f3;
+        background-color: #e3f2fd;
+    }
+    
+    .drop-zone.has-item {
+        border-style: solid;
+        border-color: #4caf50;
+        background-color: #f1f8e9;
+    }
+
+    .drop-zone.has-item .draggable {
+        margin: 0;
+    }
+
+    .item-text {
+        text-align: center;
+        word-break: break-word;
+    }
+
+    .connection-lines {
+        width: 100%;
+        height: 100%;
+        position: relative;
+    }
+
+    img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+    }
+    </style>
+{% else %}
+    <div class="alert alert-warning">
+        Cet exercice n'a pas encore d'éléments à associer.
+    </div>
+{% endif %}

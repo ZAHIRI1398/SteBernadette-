@@ -11,7 +11,7 @@
                     <h3 class="mb-0">Modifier l'exercice</h3>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('edit_exercise', exercise_id=exercise.id) }}">
+                    <form method="POST" action="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" id="editExerciseForm">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         
                         <div class="mb-3">
@@ -19,65 +19,93 @@
                             <input type="text" class="form-control" id="title" name="title" value="{{ exercise.title }}" required>
                         </div>
                         
+                        
                         <div class="mb-3">
                             <label for="description" class="form-label">Description</label>
                             <textarea class="form-control" id="description" name="description" rows="3">{{ exercise.description }}</textarea>
                         </div>
                         
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label for="subject" class="form-label">Matière *</label>
-                                    <select class="form-select" id="subject" name="subject" required>
-                                        <option value="">Choisir...</option>
-                                        <option value="mathematiques" {% if exercise.subject == 'mathematiques' %}selected{% endif %}>Mathématiques</option>
-                                        <option value="francais" {% if exercise.subject == 'francais' %}selected{% endif %}>Français</option>
-                                        <option value="histoire" {% if exercise.subject == 'histoire' %}selected{% endif %}>Histoire</option>
-                                        <option value="geographie" {% if exercise.subject == 'geographie' %}selected{% endif %}>Géographie</option>
-                                        <option value="sciences" {% if exercise.subject == 'sciences' %}selected{% endif %}>Sciences</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label for="level" class="form-label">Niveau *</label>
-                                    <select class="form-select" id="level" name="level" required>
-                                        <option value="">Choisir...</option>
-                                        <option value="facile" {% if exercise.level == 'facile' %}selected{% endif %}>Facile</option>
-                                        <option value="moyen" {% if exercise.level == 'moyen' %}selected{% endif %}>Moyen</option>
-                                        <option value="difficile" {% if exercise.level == 'difficile' %}selected{% endif %}>Difficile</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label for="type" class="form-label">Type *</label>
-                                    <select class="form-select" id="type" name="type" required>
-                                        <option value="">Choisir...</option>
-                                        <option value="qcm" {% if exercise.type == 'qcm' %}selected{% endif %}>QCM</option>
-                                        <option value="texte" {% if exercise.type == 'texte' %}selected{% endif %}>Texte</option>
-                                        <option value="calcul" {% if exercise.type == 'calcul' %}selected{% endif %}>Calcul</option>
-                                    </select>
-                                </div>
-                            </div>
+                        <div class="mb-3">
+                            <label for="exercise_type" class="form-label">Type d'exercice *</label>
+                            <select class="form-select" id="exercise_type" name="exercise_type" required>
+                                <option value="" selected disabled>Choisir un type d'exercice</option>
+                                <option value="file_upload" {% if exercise.exercise_type == 'file_upload' %}selected{% endif %}>Dépôt de fichier</option>
+                                <option value="pairs" {% if exercise.exercise_type == 'pairs' %}selected{% endif %}>Association de paires</option>
+                                <option value="word_search" {% if exercise.exercise_type == 'word_search' %}selected{% endif %}>Mots mêlés</option>
+                                <option value="qcm" {% if exercise.exercise_type == 'qcm' %}selected{% endif %}>QCM</option>
+                            </select>
                         </div>
                         
-                        <div class="mb-3">
-                            <label class="form-label">Contenu de l'exercice *</label>
-                            <div id="exerciseContent">
-                                <!-- Le contenu sera chargé dynamiquement en fonction du type d'exercice -->
+                        <div id="qcmContent" {% if exercise.exercise_type != 'qcm' %}style="display: none"{% endif %}>
+                            <input type="hidden" name="question_count" id="questionCount" value="{{ content.questions|length if content.questions else 1 }}">
+                            
+                            <div id="questionsContainer">
+                                {% if content.questions %}
+                                    {% for q in content.questions %}
+                                        <div class="question-block mb-4" data-question-index="{{ loop.index0 }}">
+                                            <h5>Question {{ loop.index }}</h5>
+                                            <div class="mb-3">
+                                                <label class="form-label">Question</label>
+                                                <input type="text" class="form-control" name="question_{{ loop.index0 }}" value="{{ q.question }}" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Options</label>
+                                                <div class="options-container">
+                                                    {% for option in q.options %}
+                                                        <div class="input-group mb-2">
+                                                            <input type="text" class="form-control" name="options_{{ loop.parent.index0 }}[]" value="{{ option }}" required>
+                                                            {% if not loop.first %}
+                                                                <button type="button" class="btn btn-danger" onclick="removeOption(this)">-</button>
+                                                            {% endif %}
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                                <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="addOption(this)">Ajouter une option</button>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Réponse correcte</label>
+                                                <select class="form-control" name="correct_{{ loop.index0 }}" required>
+                                                    {% for option in q.options %}
+                                                        <option value="{{ option }}" {% if option == q.correct %}selected{% endif %}>{{ option }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            {% if not loop.first %}
+                                                <button type="button" class="btn btn-danger" onclick="removeQuestion(this)">Supprimer la question</button>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="question-block mb-4" data-question-index="0">
+                                        <h5>Question 1</h5>
+                                        <div class="mb-3">
+                                            <label class="form-label">Question</label>
+                                            <input type="text" class="form-control" name="question_0" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Options</label>
+                                            <div class="options-container">
+                                                <div class="input-group mb-2">
+                                                    <input type="text" class="form-control" name="options_0[]" required>
+                                                </div>
+                                            </div>
+                                            <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="addOption(this)">Ajouter une option</button>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Réponse correcte</label>
+                                            <select class="form-control" name="correct_0" required>
+                                            </select>
+                                        </div>
+                                    </div>
+                                {% endif %}
                             </div>
+                            
+                            <button type="button" class="btn btn-primary mb-3" onclick="addQuestion()">Ajouter une question</button>
                         </div>
                         
                         <div class="d-flex justify-content-between">
-                            <a href="{{ url_for('exercise_library') }}" class="btn btn-secondary">
-                                <i class="fas fa-arrow-left"></i> Retour
-                            </a>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save"></i> Enregistrer les modifications
-                            </button>
+                            <a href="{{ url_for('exercise_library') }}" class="btn btn-secondary">Annuler</a>
+                            <button type="submit" class="btn btn-primary">Enregistrer</button>
                         </div>
                     </form>
                 </div>
@@ -86,142 +114,107 @@
     </div>
 </div>
 
-{% block extra_js %}
 <script>
-// Fonction pour charger le contenu initial
-function loadInitialContent() {
-    const type = document.getElementById('type').value;
-    const content = {{ exercise.content|tojson }};
-    const contentDiv = document.getElementById('exerciseContent');
-    
-    if (type === 'qcm') {
-        contentDiv.innerHTML = `
-            <div class="mb-3">
-                <label class="form-label">Question</label>
-                <input type="text" class="form-control" name="question" value="${content.question}" required>
-            </div>
-            <div id="options">
-                ${content.options.map((option, index) => `
-                    <div class="mb-2">
-                        <div class="input-group">
-                            <div class="input-group-text">
-                                <input type="radio" name="correct_answer" value="${index}" ${content.correct_answer === index ? 'checked' : ''} required>
-                            </div>
-                            <input type="text" class="form-control" name="options[]" value="${option}" required>
-                            ${index > 1 ? `
-                                <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.parentElement.remove()">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            ` : ''}
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addOption()">
-                <i class="fas fa-plus"></i> Ajouter une option
-            </button>
-        `;
-    } else if (type === 'texte') {
-        contentDiv.innerHTML = `
-            <div class="mb-3">
-                <label class="form-label">Question</label>
-                <input type="text" class="form-control" name="question" value="${content.question}" required>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Réponse attendue</label>
-                <textarea class="form-control" name="answer" rows="3" required>${content.answer}</textarea>
-            </div>
-        `;
-    } else if (type === 'calcul') {
-        contentDiv.innerHTML = `
-            <div class="mb-3">
-                <label class="form-label">Expression mathématique</label>
-                <input type="text" class="form-control" name="expression" value="${content.expression}" required>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Résultat</label>
-                <input type="number" step="any" class="form-control" name="result" value="${content.result}" required>
-            </div>
-        `;
-    } else {
-        contentDiv.innerHTML = '';
-    }
+function addOption(btn) {
+    const questionBlock = btn.closest('.question-block');
+    const questionIndex = questionBlock.dataset.questionIndex;
+    const optionsContainer = questionBlock.querySelector('.options-container');
+    const newOption = document.createElement('div');
+    newOption.className = 'input-group mb-2';
+    newOption.innerHTML = `
+        <input type="text" class="form-control" name="options_${questionIndex}[]" required>
+        <button type="button" class="btn btn-danger" onclick="removeOption(this)">-</button>
+    `;
+    optionsContainer.appendChild(newOption);
+    updateCorrectOptions(questionBlock);
 }
 
-document.getElementById('type').addEventListener('change', function() {
-    const type = this.value;
-    const contentDiv = document.getElementById('exerciseContent');
+function removeOption(btn) {
+    const optionDiv = btn.parentElement;
+    const questionBlock = optionDiv.closest('.question-block');
+    optionDiv.remove();
+    updateCorrectOptions(questionBlock);
+}
+
+function updateCorrectOptions(questionBlock) {
+    const options = Array.from(questionBlock.querySelectorAll('.options-container input')).map(input => input.value);
+    const correctSelect = questionBlock.querySelector('select[name^="correct_"]');
+    const currentValue = correctSelect.value;
     
-    if (type === 'qcm') {
-        contentDiv.innerHTML = `
-            <div class="mb-3">
-                <label class="form-label">Question</label>
-                <input type="text" class="form-control" name="question" required>
-            </div>
-            <div id="options">
-                <div class="mb-2">
-                    <div class="input-group">
-                        <div class="input-group-text">
-                            <input type="radio" name="correct_answer" value="0" required>
-                        </div>
-                        <input type="text" class="form-control" name="options[]" placeholder="Option 1" required>
-                    </div>
+    correctSelect.innerHTML = options.map(option => 
+        `<option value="${option}" ${option === currentValue ? 'selected' : ''}>${option}</option>`
+    ).join('');
+}
+
+function addQuestion() {
+    const container = document.getElementById('questionsContainer');
+    const questionCount = parseInt(document.getElementById('questionCount').value);
+    const newQuestionBlock = document.createElement('div');
+    newQuestionBlock.className = 'question-block mb-4';
+    newQuestionBlock.dataset.questionIndex = questionCount;
+    
+    newQuestionBlock.innerHTML = `
+        <h5>Question ${questionCount + 1}</h5>
+        <div class="mb-3">
+            <label class="form-label">Question</label>
+            <input type="text" class="form-control" name="question_${questionCount}" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Options</label>
+            <div class="options-container">
+                <div class="input-group mb-2">
+                    <input type="text" class="form-control" name="options_${questionCount}[]" required>
                 </div>
             </div>
-            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addOption()">
-                <i class="fas fa-plus"></i> Ajouter une option
-            </button>
-        `;
-    } else if (type === 'texte') {
-        contentDiv.innerHTML = `
-            <div class="mb-3">
-                <label class="form-label">Question</label>
-                <input type="text" class="form-control" name="question" required>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Réponse attendue</label>
-                <textarea class="form-control" name="answer" rows="3" required></textarea>
-            </div>
-        `;
-    } else if (type === 'calcul') {
-        contentDiv.innerHTML = `
-            <div class="mb-3">
-                <label class="form-label">Expression mathématique</label>
-                <input type="text" class="form-control" name="expression" required>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Résultat</label>
-                <input type="number" step="any" class="form-control" name="result" required>
-            </div>
-        `;
-    } else {
-        contentDiv.innerHTML = '';
-    }
-});
-
-function addOption() {
-    const options = document.getElementById('options');
-    const optionCount = options.children.length;
-    
-    const newOption = document.createElement('div');
-    newOption.className = 'mb-2';
-    newOption.innerHTML = `
-        <div class="input-group">
-            <div class="input-group-text">
-                <input type="radio" name="correct_answer" value="${optionCount}" required>
-            </div>
-            <input type="text" class="form-control" name="options[]" placeholder="Option ${optionCount + 1}" required>
-            <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.parentElement.remove()">
-                <i class="fas fa-trash"></i>
-            </button>
+            <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="addOption(this)">Ajouter une option</button>
         </div>
+        <div class="mb-3">
+            <label class="form-label">Réponse correcte</label>
+            <select class="form-control" name="correct_${questionCount}" required>
+            </select>
+        </div>
+        <button type="button" class="btn btn-danger" onclick="removeQuestion(this)">Supprimer la question</button>
     `;
     
-    options.appendChild(newOption);
+    container.appendChild(newQuestionBlock);
+    document.getElementById('questionCount').value = questionCount + 1;
+    updateCorrectOptions(newQuestionBlock);
 }
 
-// Charger le contenu initial au chargement de la page
-document.addEventListener('DOMContentLoaded', loadInitialContent);
+function removeQuestion(btn) {
+    const questionBlock = btn.closest('.question-block');
+    questionBlock.remove();
+    
+    // Mettre à jour les indices
+    const allQuestions = document.querySelectorAll('.question-block');
+    allQuestions.forEach((block, index) => {
+        block.dataset.questionIndex = index;
+        block.querySelector('h5').textContent = `Question ${index + 1}`;
+        
+        // Mettre à jour les noms des champs
+        block.querySelector('input[name^="question_"]').name = `question_${index}`;
+        block.querySelectorAll('input[name^="options_"]').forEach(input => {
+            input.name = `options_${index}[]`;
+        });
+        block.querySelector('select[name^="correct_"]').name = `correct_${index}`;
+    });
+    
+    document.getElementById('questionCount').value = allQuestions.length;
+}
+
+document.getElementById('exercise_type').addEventListener('change', function() {
+    const qcmContent = document.getElementById('qcmContent');
+    qcmContent.style.display = this.value === 'qcm' ? 'block' : 'none';
+});
+
+// Mettre à jour les options correctes au chargement
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.question-block').forEach(block => {
+        const inputs = block.querySelectorAll('.options-container input');
+        inputs.forEach(input => {
+            input.addEventListener('input', () => updateCorrectOptions(block));
+        });
+    });
+});
 </script>
-{% endblock %}
 {% endblock %}
