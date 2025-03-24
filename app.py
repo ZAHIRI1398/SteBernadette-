@@ -1623,7 +1623,7 @@ def view_feedback(exercise_id, attempt_id):
     # Si c'est un enseignant, vérifier qu'il enseigne dans la classe associée au cours
     if current_user.is_teacher and attempt.course_id:
         course = Course.query.get(attempt.course_id)
-        if course and course.teacher_id != current_user.id:
+        if course and course.class_obj.teacher_id != current_user.id:
             flash("Vous n'avez pas l'autorisation de voir cette tentative.", "error")
             return redirect(url_for('index'))
     
@@ -1789,22 +1789,31 @@ def debug_exercises():
 def view_attempt(exercise_id, attempt_id):
     exercise = Exercise.query.get_or_404(exercise_id)
     attempt = ExerciseAttempt.query.get_or_404(attempt_id)
+    course_id = request.args.get('course_id', type=int)
+    course = Course.query.get(course_id) if course_id else None
     
-    # Vérifier que l'utilisateur a le droit de voir cette tentative
-    if not current_user.is_teacher and attempt.student_id != current_user.id:
-        flash("Vous n'avez pas l'autorisation de voir cette tentative.", "error")
-        return redirect(url_for('index'))
-
-    # Si c'est un enseignant, vérifier qu'il enseigne dans la classe associée au cours
-    if current_user.is_teacher and attempt.course_id:
-        course = Course.query.get(attempt.course_id)
-        if course and course.teacher_id != current_user.id:
-            flash("Vous n'avez pas l'autorisation de voir cette tentative.", "error")
-            return redirect(url_for('index'))
+    # Vérifier que la tentative appartient à l'exercice
+    if attempt.exercise_id != exercise_id:
+        flash('Cette tentative ne correspond pas à cet exercice.', 'error')
+        return redirect(url_for('view_exercise', exercise_id=exercise_id))
+    
+    # Si c'est un professeur
+    if current_user.is_teacher:
+        # Vérifier que le professeur est bien celui de la classe si un cours est spécifié
+        if course and course.class_obj.teacher_id != current_user.id:
+            flash('Vous n\'êtes pas autorisé à voir cette tentative.', 'error')
+            return redirect(url_for('view_exercise', exercise_id=exercise_id))
+    # Si c'est un élève
+    else:
+        # Vérifier que la tentative appartient bien à l'élève
+        if attempt.student_id != current_user.id:
+            flash('Vous n\'êtes pas autorisé à voir cette tentative.', 'error')
+            return redirect(url_for('view_exercise', exercise_id=exercise_id))
     
     return render_template('view_attempt.html', 
                          exercise=exercise, 
-                         attempt=attempt)
+                         attempt=attempt,
+                         course=course)
 
 @app.route('/debug/images')
 def debug_images():
