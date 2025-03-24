@@ -1,235 +1,266 @@
-{% set content = exercise.get_content() %}
 {% if content and content.items_left %}
-    {% if current_user.is_teacher %}
-    <!-- Debug info -->
-    <div class="alert alert-info">
-        <h5>Debug Info</h5>
-        <pre>{{ content | tojson(indent=2) }}</pre>
-        
-        <h5>Image URLs</h5>
-        <ul>
-        {% for image in content.items_left_images %}
-            <li>
-                {{ url_for('static', filename='uploads/' + image) }}
-                <br>
-                <img src="{{ url_for('static', filename='uploads/' + image) }}" style="max-width: 200px; border: 2px solid blue;">
-            </li>
-        {% endfor %}
-        </ul>
+    <div class="pairs-container">
+        <form method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Associez les éléments correspondants</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-5">
+                            <h6 class="mb-3">Éléments de gauche</h6>
+                            <div class="items-list" id="leftItems">
+                                {% for item in content.items_left %}
+                                    <div class="item-card" data-index="{{ loop.index0 }}">
+                                        {% if content.items_left_images and content.items_left_images[loop.index0] %}
+                                            <img src="{{ url_for('static', filename='images/' + content.items_left_images[loop.index0]) }}" 
+                                                 alt="Image {{ loop.index }}"
+                                                 class="item-image mb-2">
+                                        {% endif %}
+                                        <div class="item-text">{{ item }}</div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-2 d-flex align-items-center justify-content-center">
+                            <div class="connection-lines" id="connectionLines"></div>
+                        </div>
+                        
+                        <div class="col-md-5">
+                            <h6 class="mb-3">Éléments de droite</h6>
+                            <div class="items-list" id="rightItems">
+                                {% for item in content.items_right %}
+                                    <div class="item-card" data-index="{{ loop.index0 }}">
+                                        {% if content.items_right_images and content.items_right_images[loop.index0] %}
+                                            <img src="{{ url_for('static', filename='images/' + content.items_right_images[loop.index0]) }}" 
+                                                 alt="Image {{ loop.index }}"
+                                                 class="item-image mb-2">
+                                        {% endif %}
+                                        <div class="item-text">{{ item }}</div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" name="answers" id="answersInput">
+
+                    {% if attempt %}
+                        <div class="mt-4">
+                            <h6>Résultats :</h6>
+                            {% for pair in attempt.pairs %}
+                                <div class="alert {% if pair.correct %}alert-success{% else %}alert-danger{% endif %} mb-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            {{ content.items_left[pair.left_index] }} ↔ {{ content.items_right[pair.right_index] }}
+                                        </div>
+                                        <div>
+                                            {% if pair.correct %}
+                                                <i class="fas fa-check text-success"></i> Correct
+                                            {% else %}
+                                                <i class="fas fa-times text-danger"></i> Incorrect
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if not attempt %}
+                <div class="text-center mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
+                        <i class="fas fa-check"></i> Valider mes réponses
+                    </button>
+                </div>
+            {% endif %}
+        </form>
     </div>
-    {% endif %}
-    
-    <form id="exerciseForm" method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="pairs-container">
-            <div class="row">
-                <div class="col-md-6">
-                    <h4 class="mb-4">Images à associer</h4>
-                    <div class="items-left">
-                        {% for item in content.items_left %}
-                            <div class="card mb-3 item-left" data-index="{{ loop.index0 }}">
-                                <div class="card-body text-center">
-                                    {% if content.items_left_images[loop.index0] %}
-                                        <img src="{{ url_for('static', filename='uploads/' + content.items_left_images[loop.index0]) }}" 
-                                             class="img-fluid mb-3 exercise-image" alt="Image {{ loop.index0 }}">
-                                    {% endif %}
-                                    <p class="mb-0">{{ item }}</p>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <h4 class="mb-4">Fractions correspondantes</h4>
-                    <div class="items-right">
-                        {% for item in content.items_right %}
-                            <div class="card mb-3 item-right" data-index="{{ loop.index0 }}">
-                                <div class="card-body text-center">
-                                    {% if content.items_right_images[loop.index0] %}
-                                        <img src="{{ url_for('static', filename='uploads/' + content.items_right_images[loop.index0]) }}" 
-                                             class="img-fluid mb-3 exercise-image" alt="Image">
-                                    {% endif %}
-                                    <p class="mb-0 h4">{{ item }}</p>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-
-            <div class="text-center mt-4 mb-4">
-                <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
-                    Valider mes réponses
-                </button>
-            </div>
-        </div>
-    </form>
-
-    <style>
-    .pairs-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 20px;
-    }
-
-    .item-left, .item-right {
-        cursor: pointer;
-        transition: all 0.3s ease;
-        margin-bottom: 1.5rem;
-        border: 1px solid #ddd; /* Ajout d'une bordure visible */
-        min-height: 100px; /* Hauteur minimale */
-    }
-
-    .item-left:hover, .item-right:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-
-    .item-selected {
-        border: 2px solid #007bff;
-        background-color: #f8f9fa;
-    }
-
-    .item-matched {
-        border: 2px solid #28a745;
-        background-color: #e9f7ef;
-        pointer-events: none;
-    }
-
-    .exercise-image {
-        max-height: 200px;
-        width: 100%; /* Forcer la largeur à 100% */
-        margin: 0 auto;
-        display: block;
-        object-fit: contain;
-        border: 1px dashed red; /* Bordure de débogage */
-    }
-
-    .card {
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        min-height: 150px; /* Hauteur minimale */
-    }
-
-    .card-body {
-        padding: 1.5rem;
-        display: flex; /* Utiliser flexbox */
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .h4 {
-        font-size: 1.5rem;
-        margin: 0;
-    }
-
-    .btn-primary {
-        padding: 0.75rem 2rem;
-        font-size: 1.1rem;
-    }
-
-    .btn-primary:disabled {
-        background-color: #6c757d;
-        border-color: #6c757d;
-    }
-    </style>
-
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.getElementById('exerciseForm');
-        const submitBtn = document.getElementById('submitBtn');
-        let selectedLeft = null;
-        let selectedRight = null;
-        const matches = {};
-        
-        // Fonction pour gérer la sélection des éléments
-        function handleSelection(element, side) {
-            if (element.classList.contains('item-matched')) return;
-            
-            const items = document.querySelectorAll(`.item-${side}`);
-            items.forEach(item => item.classList.remove('item-selected'));
-            element.classList.add('item-selected');
-            
-            if (side === 'left') {
-                selectedLeft = element;
-            } else {
-                selectedRight = element;
-            }
-            
-            // Vérifier si on peut faire une paire
-            if (selectedLeft && selectedRight) {
-                const leftIndex = selectedLeft.dataset.index;
-                const rightIndex = selectedRight.dataset.index;
-                
-                // Enregistrer la paire
-                matches[leftIndex] = rightIndex;
-                
-                // Marquer les éléments comme appariés
-                selectedLeft.classList.remove('item-selected');
-                selectedRight.classList.remove('item-selected');
-                selectedLeft.classList.add('item-matched');
-                selectedRight.classList.add('item-matched');
-                
-                // Réinitialiser la sélection
-                selectedLeft = null;
-                selectedRight = null;
-                
-                // Vérifier si toutes les paires sont faites
-                updateSubmitButton();
-            }
-        }
-        
-        // Ajouter les écouteurs d'événements pour les éléments de gauche
-        document.querySelectorAll('.item-left').forEach(item => {
-            item.addEventListener('click', function() {
-                handleSelection(this, 'left');
-            });
-        });
-        
-        // Ajouter les écouteurs d'événements pour les éléments de droite
-        document.querySelectorAll('.item-right').forEach(item => {
-            item.addEventListener('click', function() {
-                handleSelection(this, 'right');
-            });
-        });
-        
-        // Mettre à jour l'état du bouton de soumission
-        function updateSubmitButton() {
-            const totalItems = document.querySelectorAll('.item-left').length;
-            const matchedItems = document.querySelectorAll('.item-matched.item-left').length;
-            submitBtn.disabled = matchedItems < totalItems;
-            
-            if (!submitBtn.disabled) {
-                submitBtn.classList.remove('btn-secondary');
-                submitBtn.classList.add('btn-primary');
-            } else {
-                submitBtn.classList.remove('btn-primary');
-                submitBtn.classList.add('btn-secondary');
-            }
-        }
-        
-        // Gérer la soumission du formulaire
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            // Créer un champ caché pour les réponses
-            let answersInput = form.querySelector('input[name="answers"]');
-            if (!answersInput) {
-                answersInput = document.createElement('input');
-                answersInput.type = 'hidden';
-                answersInput.name = 'answers';
-                form.appendChild(answersInput);
-            }
-            answersInput.value = JSON.stringify(matches);
-            
-            // Soumettre le formulaire
-            form.submit();
-        });
-    });
-    </script>
 {% else %}
     <div class="alert alert-warning">
-        Cet exercice n'a pas encore de contenu défini.
+        Aucun élément n'a été défini pour cet exercice.
     </div>
 {% endif %}
+
+<style>
+.pairs-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.item-card {
+    background-color: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.item-card:hover {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.item-card.selected {
+    background-color: #e7f1ff;
+    border-color: #0d6efd;
+}
+
+.item-card.matched {
+    background-color: #d1e7dd;
+    border-color: #198754;
+    cursor: default;
+}
+
+.item-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.25rem;
+}
+
+.connection-lines {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.connection-line {
+    position: absolute;
+    height: 2px;
+    background-color: #0d6efd;
+    transform-origin: left center;
+}
+
+.connection-line.correct {
+    background-color: #198754;
+}
+
+.connection-line.incorrect {
+    background-color: #dc3545;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const leftItems = document.querySelectorAll('#leftItems .item-card');
+    const rightItems = document.querySelectorAll('#rightItems .item-card');
+    const submitBtn = document.getElementById('submitBtn');
+    const answersInput = document.getElementById('answersInput');
+    const connectionLines = document.getElementById('connectionLines');
+    
+    let selectedLeft = null;
+    let matches = [];
+
+    function updateSubmitButton() {
+        if (submitBtn) {
+            submitBtn.disabled = matches.length < leftItems.length;
+        }
+    }
+
+    function drawLines() {
+        connectionLines.innerHTML = '';
+        matches.forEach(match => {
+            const leftCard = leftItems[match.left];
+            const rightCard = rightItems[match.right];
+            const leftRect = leftCard.getBoundingClientRect();
+            const rightRect = rightCard.getBoundingClientRect();
+            const containerRect = connectionLines.getBoundingClientRect();
+
+            const startX = 0;
+            const startY = leftRect.top - containerRect.top + leftRect.height / 2;
+            const endX = containerRect.width;
+            const endY = rightRect.top - containerRect.top + rightRect.height / 2;
+
+            const line = document.createElement('div');
+            line.className = 'connection-line';
+            line.style.top = startY + 'px';
+            line.style.left = startX + 'px';
+            line.style.width = endX + 'px';
+            
+            const angle = Math.atan2(endY - startY, endX - startX);
+            const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+            
+            line.style.width = length + 'px';
+            line.style.transform = `rotate(${angle}rad)`;
+            
+            connectionLines.appendChild(line);
+        });
+    }
+
+    function updateMatches() {
+        leftItems.forEach(item => item.classList.remove('matched', 'selected'));
+        rightItems.forEach(item => item.classList.remove('matched', 'selected'));
+        
+        matches.forEach(match => {
+            leftItems[match.left].classList.add('matched');
+            rightItems[match.right].classList.add('matched');
+        });
+        
+        if (selectedLeft !== null) {
+            leftItems[selectedLeft].classList.add('selected');
+        }
+        
+        drawLines();
+        updateSubmitButton();
+        
+        // Update hidden input with matches
+        answersInput.value = JSON.stringify(matches);
+    }
+
+    leftItems.forEach((item, index) => {
+        if (!item.closest('.matched')) {
+            item.addEventListener('click', () => {
+                if (selectedLeft === index) {
+                    selectedLeft = null;
+                } else {
+                    selectedLeft = index;
+                }
+                updateMatches();
+            });
+        }
+    });
+
+    rightItems.forEach((item, index) => {
+        if (!item.closest('.matched')) {
+            item.addEventListener('click', () => {
+                if (selectedLeft !== null) {
+                    // Check if the left item is already matched
+                    const existingMatchIndex = matches.findIndex(m => m.left === selectedLeft);
+                    if (existingMatchIndex !== -1) {
+                        matches.splice(existingMatchIndex, 1);
+                    }
+                    
+                    // Check if the right item is already matched
+                    const rightMatchIndex = matches.findIndex(m => m.right === index);
+                    if (rightMatchIndex !== -1) {
+                        matches.splice(rightMatchIndex, 1);
+                    }
+                    
+                    matches.push({ left: selectedLeft, right: index });
+                    selectedLeft = null;
+                    updateMatches();
+                }
+            });
+        }
+    });
+
+    // Initial setup
+    updateMatches();
+    
+    // Handle window resize
+    window.addEventListener('resize', drawLines);
+});
+</script>

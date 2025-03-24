@@ -33,9 +33,26 @@
                                 <option value="pairs" {% if exercise.exercise_type == 'pairs' %}selected{% endif %}>Association de paires</option>
                                 <option value="word_search" {% if exercise.exercise_type == 'word_search' %}selected{% endif %}>Mots mêlés</option>
                                 <option value="qcm" {% if exercise.exercise_type == 'qcm' %}selected{% endif %}>QCM</option>
+                                <option value="fill_in_blanks" {% if exercise.exercise_type == 'fill_in_blanks' %}selected{% endif %}>Texte à trous</option>
                             </select>
                         </div>
                         
+                        <!-- Formulaire pour texte à trous -->
+                        <div id="fillInBlanksContent" {% if exercise.exercise_type != 'fill_in_blanks' %}style="display: none"{% endif %}>
+                            <div class="mb-3">
+                                <label class="form-label">Texte avec trous (utilisez ___ pour les trous)</label>
+                                <textarea class="form-control" name="sentence" rows="5" {% if exercise.exercise_type == 'fill_in_blanks' %}required{% endif %}>{{ content.sentence if content and content.sentence else '' }}</textarea>
+                                <small class="form-text text-muted">Exemple: Le chat ___ sur le ___.</small>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Mots à placer (un par ligne)</label>
+                                <textarea class="form-control" name="words" rows="5" {% if exercise.exercise_type == 'fill_in_blanks' %}required{% endif %}>{{ '\n'.join(content.words) if content and content.words else '' }}</textarea>
+                                <small class="form-text text-muted">Entrez un mot par ligne dans l'ordre correspondant aux trous.</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Formulaire pour QCM -->
                         <div id="qcmContent" {% if exercise.exercise_type != 'qcm' %}style="display: none"{% endif %}>
                             <input type="hidden" name="question_count" id="questionCount" value="{{ content.questions|length if content.questions else 1 }}">
                             
@@ -204,7 +221,9 @@ function removeQuestion(btn) {
 
 document.getElementById('exercise_type').addEventListener('change', function() {
     const qcmContent = document.getElementById('qcmContent');
+    const fillInBlanksContent = document.getElementById('fillInBlanksContent');
     qcmContent.style.display = this.value === 'qcm' ? 'block' : 'none';
+    fillInBlanksContent.style.display = this.value === 'fill_in_blanks' ? 'block' : 'none';
 });
 
 // Mettre à jour les options correctes au chargement

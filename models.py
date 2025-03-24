@@ -157,10 +157,10 @@ class Exercise(db.Model):
     
     EXERCISE_TYPES = [
         ('qcm', 'QCM'),
-        ('drag_and_drop', 'Mots à placer'),
-        ('pairs', 'Paires à associer'),
-        ('file', 'Dépôt de fichier'),
-        ('word_search', 'Mots mêlés')
+        ('word_search', 'Mots mêlés'),
+        ('pairs', 'Association de paires'),
+        ('fill_in_blanks', 'Texte à trous'),
+        ('file', 'Dépôt de fichier')
     ]
     
     id = db.Column(db.Integer, primary_key=True)
@@ -171,6 +171,7 @@ class Exercise(db.Model):
     image_path = db.Column(db.String(200))
     teacher_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    max_attempts = db.Column(db.Integer, default=3)  # Nombre maximum de tentatives autorisées
     
     # Relations
     course_exercises = db.relationship('Course', secondary=course_exercise, back_populates='exercises', lazy=True)
@@ -180,75 +181,39 @@ class Exercise(db.Model):
         return f'<Exercise {self.title}>'
     
     def get_content(self):
-        """Récupère le contenu de l'exercice sous forme de dictionnaire."""
+        """Récupères le contenu de l'exercice sous forme de dictionnaire."""
         try:
-            print(f"\n[DEBUG] get_content pour exercice {self.id}")
-            print(f"[DEBUG] Content brut: {self.content}")
-            if not self.content:
-                print("[DEBUG] Pas de contenu, retourne dict vide")
-                return {}
-            content = json.loads(self.content)
-            print(f"[DEBUG] Content parsé: {content}")
-            return content
-        except json.JSONDecodeError as e:
-            print(f"[ERROR] Erreur de décodage JSON: {str(e)}")
+            return json.loads(self.content) if self.content else {}
+        except:
             return {}
     
     def set_content(self, content):
         """Enregistre le contenu de l'exercice"""
-        if isinstance(content, dict):
-            self.content = json.dumps(content)
-        else:
-            self.content = content
-
+        self.content = json.dumps(content)
+    
     def get_student_progress(self, student_id):
         """Récupère la progression d'un étudiant sur cet exercice"""
-        from app import ExerciseAttempt
-        
-        # Récupérer toutes les tentatives de l'étudiant pour cet exercice
         attempts = ExerciseAttempt.query.filter_by(
             exercise_id=self.id,
             student_id=student_id
         ).order_by(ExerciseAttempt.created_at.desc()).all()
         
         if not attempts:
-            return {
-                'status': 'not_started',
-                'attempts_count': 0,
-                'best_score': None,
-                'last_attempt': None,
-                'needs_grading': False
-            }
-        
-        # Calculer les statistiques
-        best_score = max((a.score for a in attempts if a.score is not None), default=None)
-        last_attempt = attempts[0]
-        needs_grading = any(a.score is None for a in attempts)
-        
-        # Déterminer le statut
-        if best_score is None and needs_grading:
-            status = 'needs_grading'
-        elif best_score == 100:
-            status = 'completed'
-        elif best_score is not None:
-            status = 'in_progress'
-        else:
-            status = 'not_started'
-        
+            return None
+            
         return {
-            'status': status,
             'attempts_count': len(attempts),
-            'best_score': best_score,
-            'last_attempt': last_attempt,
-            'needs_grading': needs_grading
+            'remaining_attempts': self.max_attempts - len(attempts) if self.max_attempts else None,
+            'best_score': max(attempt.score for attempt in attempts),
+            'last_attempt': attempts[0]
         }
     
     def get_stats(self, course_id=None):
-        """Obtenir les statistiques pour cet exercice"""
-        query = ExerciseAttempt.query.filter_by(exercise_id=self.id)
+        """Récupère les statistiques globales de l'exercice."""
+        # Filtrer les tentatives par cours si spécifié
+        attempts = self.attempts
         if course_id:
-            query = query.filter_by(course_id=course_id)
-        attempts = query.all()
+            attempts = [a for a in attempts if a.course_id == course_id]
         
         if not attempts:
             return {
@@ -256,54 +221,34 @@ class Exercise(db.Model):
                 'total_students': 0,
                 'average_score': 0,
                 'completion_rate': 0,
-                'success_rate': 0,
-                'student_stats': []
+                'success_rate': 0
             }
         
-        # Calculer les statistiques globales
-        total_students = len(set(a.student_id for a in attempts))
-        average_score = sum(a.score for a in attempts) / len(attempts)
+        # Calculer les statistiques
+        total_attempts = len(attempts)
+        unique_students = len(set(attempt.student_id for attempt in attempts))
+        scores = [attempt.score for attempt in attempts if attempt.score is not None]
+        average_score = sum(scores) / len(scores) if scores else 0
         
-        # Calculer le taux de complétion (pourcentage d'élèves ayant tenté l'exercice)
+        # Calculer le taux de complétion (pourcentage d'étudiants ayant fait au moins une tentative)
+        students_query = User.query.filter_by(role='student')
         if course_id:
             course = Course.query.get(course_id)
-            total_possible_students = len(course.class_obj.students)
-        else:
-            # Si pas de cours spécifié, on considère tous les élèves qui ont tenté l'exercice
-            total_possible_students = total_students
-        
-        completion_rate = (total_students / total_possible_students * 100) if total_possible_students > 0 else 0
+            if course:
+                students_query = course.class_obj.students
+        total_students = students_query.count()
+        completion_rate = (unique_students / total_students * 100) if total_students > 0 else 0
         
         # Calculer le taux de réussite (pourcentage de tentatives avec un score >= 70%)
-        successful_attempts = sum(1 for a in attempts if a.score >= 70)
-        success_rate = (successful_attempts / len(attempts) * 100)
-        
-        # Calculer les statistiques par élève
-        student_stats = {}
-        for attempt in attempts:
-            if attempt.student_id not in student_stats:
-                student_stats[attempt.student_id] = {
-                    'student': attempt.student,
-                    'attempts': 0,
-                    'best_score': 0,
-                    'last_score': 0,
-                    'average_score': 0,
-                    'total_score': 0
-                }
-            stats = student_stats[attempt.student_id]
-            stats['attempts'] += 1
-            stats['total_score'] += attempt.score
-            stats['average_score'] = stats['total_score'] / stats['attempts']
-            stats['best_score'] = max(stats['best_score'], attempt.score)
-            stats['last_score'] = attempt.score  # Le dernier score sera le plus récent car les tentatives sont triées
+        successful_attempts = len([score for score in scores if score >= 70])
+        success_rate = (successful_attempts / len(scores) * 100) if scores else 0
         
         return {
-            'total_attempts': len(attempts),
-            'total_students': total_students,
+            'total_attempts': total_attempts,
+            'total_students': unique_students,
             'average_score': average_score,
             'completion_rate': completion_rate,
-            'success_rate': success_rate,
-            'student_stats': list(student_stats.values())
+            'success_rate': success_rate
         }
 
 class ExerciseAttempt(db.Model):

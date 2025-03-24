@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Détails de la tentative{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Détails de la tentative</h2>
+    <h4>Exercice : {{ exercise.title }}</h4>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Informations</h5>
+                <span class="badge bg-{{ 'success' if attempt.score >= 50 else 'danger' }}">
+                    Score : {{ "%.1f"|format(attempt.score) }}%
+                </span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Date :</strong> {{ attempt.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                    <p><strong>Étudiant :</strong> {{ attempt.student.username }}</p>
+                    {% if attempt.course %}
+                        <p><strong>Cours :</strong> {{ attempt.course.title }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <h5>Réponses</h5>
+                {% if exercise.exercise_type == 'qcm' %}
+                    {% set content = exercise.get_content() %}
+                    {% if content and content.questions %}
+                        {% for question in content.questions %}
+                            {% set question_index = loop.index0 %}
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-title">Question {{ loop.index }}</h6>
+                                    <p class="card-text">{{ question }}</p>
+                                    
+                                    <div class="list-group">
+                                        {% for option in content.options[question_index] %}
+                                            {% set student_answer = attempt.get_answers().get('answer_' ~ question_index, -1)|int %}
+                                            {% set is_correct = loop.index0 == content.correct_answers[question_index] %}
+                                            <div class="list-group-item 
+                                                {{ 'list-group-item-success' if is_correct and loop.index0 == student_answer else '' }}
+                                                {{ 'list-group-item-danger' if not is_correct and loop.index0 == student_answer else '' }}">
+                                                {{ option }}
+                                                {% if loop.index0 == student_answer %}
+                                                    <span class="badge bg-primary float-end">Réponse de l'étudiant</span>
+                                                {% endif %}
+                                                {% if is_correct %}
+                                                    <span class="badge bg-success float-end me-2">Réponse correcte</span>
+                                                {% endif %}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% elif exercise.exercise_type == 'word_search' %}
+                    {% set content = exercise.get_content() %}
+                    {% if content and content.words %}
+                        <div class="list-group">
+                            {% for word in content.words %}
+                                {% set found = word in attempt.get_answers().get('found_words', []) %}
+                                <div class="list-group-item {{ 'list-group-item-success' if found else 'list-group-item-danger' }}">
+                                    {{ word }}
+                                    <span class="badge {{ 'bg-success' if found else 'bg-danger' }} float-end">
+                                        {{ 'Trouvé' if found else 'Non trouvé' }}
+                                    </span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% elif exercise.exercise_type == 'drag_and_drop' %}
+                    {% set content = exercise.get_content() %}
+                    {% if content %}
+                        <div class="list-group">
+                            {% for zone in content.zones %}
+                                {% set answers = attempt.get_answers().get('answers', {}) %}
+                                {% set student_answer = answers.get(loop.index0|string, '') %}
+                                <div class="list-group-item">
+                                    <strong>Zone {{ loop.index }} :</strong> {{ zone }}
+                                    <div class="mt-2">
+                                        <span class="badge bg-primary">Réponse : {{ student_answer }}</span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <a href="{{ url_for('exercise_stats', exercise_id=exercise.id) }}" class="btn btn-secondary">
+            Retour aux statistiques
+        </a>
+    </div>
+</div>
+{% endblock %}

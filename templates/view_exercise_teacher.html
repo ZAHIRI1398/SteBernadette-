@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}{{ exercise.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('exercise_library') }}">Bibliothèque d'exercices</a></li>
+            <li class="breadcrumb-item active">{{ exercise.title }}</li>
+        </ol>
+    </nav>
+
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="mb-0">{{ exercise.title }}</h3>
+            <div>
+                <a href="{{ url_for('exercise_stats', exercise_id=exercise.id) }}" class="btn btn-info">
+                    <i class="fas fa-chart-bar"></i> Statistiques
+                </a>
+                <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-secondary">
+                    <i class="fas fa-edit"></i> Modifier
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <p class="card-text">{{ exercise.description }}</p>
+            
+            {% if exercise.exercise_type == 'qcm' %}
+                {% include 'exercise_types/qcm_preview.html' %}
+            {% elif exercise.exercise_type == 'word_search' %}
+                {% include 'exercise_types/word_search_preview.html' %}
+            {% elif exercise.exercise_type == 'drag_and_drop' %}
+                {% include 'exercise_types/drag_and_drop_preview.html' %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

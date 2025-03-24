@@ -35,6 +35,9 @@
                         <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteCourseModal">
                             <i class="fas fa-trash"></i> Supprimer
                         </button>
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addExistingExerciseModal">
+                            <i class="fas fa-plus"></i> Ajouter un exercice existant
+                        </button>
                     </div>
                     {% endif %}
                 </div>
@@ -57,9 +60,6 @@
                         <a href="{{ url_for('create_exercise', course_id=course.id) }}" class="btn btn-success">
                             <i class="fas fa-plus"></i> Nouvel exercice
                         </a>
-                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addExerciseModal">
-                            <i class="fas fa-plus"></i> Ajouter un exercice existant
-                        </button>
                     </div>
                     {% endif %}
                 </div>
@@ -73,22 +73,14 @@
                                 {% if not current_user.is_teacher %}
                                     {% set progress = exercise.get_student_progress(current_user.id) %}
                                     <div class="d-flex align-items-center">
-                                        {% if progress.status == 'completed' %}
-                                            <span class="badge bg-success me-2">Terminé</span>
-                                        {% elif progress.status == 'in_progress' %}
-                                            <span class="badge bg-warning me-2">En cours</span>
-                                        {% elif progress.status == 'needs_grading' %}
-                                            <span class="badge bg-info me-2">En attente de correction</span>
+                                        {% if progress and progress.attempts_count > 0 %}
+                                            {% if progress.best_score is defined and progress.best_score is not none %}
+                                                <span class="badge bg-primary me-2">Meilleur score : {{ "%.1f"|format(progress.best_score) }}%</span>
+                                            {% endif %}
+                                            
+                                            <span class="badge bg-info">{{ progress.attempts_count }} tentative(s)</span>
                                         {% else %}
                                             <span class="badge bg-secondary me-2">Non commencé</span>
-                                        {% endif %}
-                                        
-                                        {% if progress.best_score is not none %}
-                                            <span class="badge bg-primary me-2">Meilleur score : {{ "%.1f"|format(progress.best_score) }}%</span>
-                                        {% endif %}
-                                        
-                                        {% if progress.attempts_count > 0 %}
-                                            <span class="badge bg-light text-dark">{{ progress.attempts_count }} tentative(s)</span>
                                         {% endif %}
                                     </div>
                                 {% endif %}
@@ -99,7 +91,7 @@
                             {% endif %}
                             
                             <div class="mt-3">
-                                <a href="{{ url_for('view_exercise', exercise_id=exercise.id) }}" class="btn btn-primary btn-sm">
+                                <a href="{{ url_for('view_exercise', exercise_id=exercise.id, course_id=course.id) }}" class="btn btn-primary btn-sm">
                                     {% if current_user.is_teacher %}
                                         <i class="fas fa-eye"></i> Voir
                                     {% else %}
@@ -207,8 +199,8 @@
     </div>
 </div>
 
-<!-- Modal d'ajout d'exercice -->
-<div class="modal fade" id="addExerciseModal" tabindex="-1">
+<!-- Modal d'ajout d'exercice existant -->
+<div class="modal fade" id="addExistingExerciseModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -216,18 +208,17 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <form action="{{ url_for('add_exercise_to_course', course_id=course.id) }}" method="POST">
+                <form id="addExistingExerciseForm" action="{{ url_for('add_exercise_to_course', course_id=course.id) }}" method="POST">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label for="exercise_id" class="form-label">Sélectionner un exercice</label>
                         <select class="form-select" id="exercise_id" name="exercise_id" required>
                             <option value="">Choisir un exercice...</option>
-                            {% for exercise in exercises_available %}
-                            <option value="{{ exercise.id }}">{{ exercise.title }}</option>
-                            {% endfor %}
                         </select>
                     </div>
-                    <button type="submit" class="btn btn-primary">Ajouter l'exercice</button>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Ajouter l'exercice</button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -271,5 +262,48 @@ function deleteFile(fileId) {
         });
     }
 }
+
+// Fonction pour retirer un exercice
+function removeExercise(exerciseId) {
+    if (confirm('Êtes-vous sûr de vouloir retirer cet exercice du cours ?')) {
+        fetch(`/course/{{ course.id }}/remove-exercise/${exerciseId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token() }}'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                alert('Une erreur est survenue lors du retrait de l\'exercice.');
+            }
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            alert('Une erreur est survenue lors du retrait de l\'exercice.');
+        });
+    }
+}
+
+// Charger la liste des exercices disponibles
+function loadAvailableExercises() {
+    fetch(`/course/{{ course.id }}/get-available-exercises`)
+        .then(response => response.json())
+        .then(exercises => {
+            const select = document.getElementById('exercise_id');
+            select.innerHTML = '<option value="">Choisir un exercice...</option>';
+            exercises.forEach(exercise => {
+                const option = document.createElement('option');
+                option.value = exercise.id;
+                option.textContent = `${exercise.title} (${exercise.type})`;
+                select.appendChild(option);
+            });
+        })
+        .catch(error => console.error('Erreur:', error));
+}
+
+// Charger les exercices quand le modal s'ouvre
+document.getElementById('addExistingExerciseModal').addEventListener('show.bs.modal', loadAvailableExercises);
 </script>
 {% endblock %}

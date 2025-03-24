@@ -4,324 +4,470 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>{{ exercise.title }}</h2>
-        <div>
-            {% if current_user.is_teacher %}
-                <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-primary">
-                    <i class="fas fa-edit"></i> Modifier
-                </a>
-                {% if exercise.teacher_id == current_user.id %}
-                    <a href="{{ url_for('exercise_stats', exercise_id=exercise.id) }}" class="btn btn-info ms-2">
-                        <i class="fas fa-chart-bar"></i> Statistiques
-                    </a>
-                {% endif %}
-            {% endif %}
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    {% if course %}
+                        <li class="breadcrumb-item"><a href="{{ url_for('view_class', class_id=course.class_obj.id) }}">{{ course.class_obj.name }}</a></li>
+                        <li class="breadcrumb-item"><a href="{{ url_for('view_course', course_id=course.id) }}">{{ course.title }}</a></li>
+                    {% else %}
+                        <li class="breadcrumb-item"><a href="{{ url_for('exercise_library') }}">Bibliothèque d'exercices</a></li>
+                    {% endif %}
+                    <li class="breadcrumb-item active">{{ exercise.title }}</li>
+                </ol>
+            </nav>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="mb-0">{{ exercise.title }}</h2>
+                </div>
+                <div class="card-body">
+                    {% if exercise.description %}
+                        <p class="lead mb-4">{{ exercise.description }}</p>
+                    {% endif %}
+
+                    {% if not current_user.is_teacher %}
+                        {% set progress = exercise.get_student_progress(current_user.id) %}
+                        {% if exercise.max_attempts %}
+                            <div class="alert {% if progress and progress['remaining_attempts'] == 0 %}alert-warning{% else %}alert-info{% endif %} mb-4">
+                                {% if not progress %}
+                                    Vous avez {{ exercise.max_attempts }} tentative{{ 's' if exercise.max_attempts > 1 }} pour cet exercice.
+                                {% else %}
+                                    {% if progress['remaining_attempts'] > 0 %}
+                                        Il vous reste {{ progress['remaining_attempts'] }} tentative{{ 's' if progress['remaining_attempts'] > 1 }} pour cet exercice.
+                                    {% else %}
+                                        Vous avez atteint le nombre maximum de tentatives pour cet exercice.
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endif %}
+
+                    <form method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}" id="exerciseForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        {% if course %}
+                        <input type="hidden" name="course_id" value="{{ course.id }}"/>
+                        {% endif %}
+                        
+                        {% if exercise.exercise_type == 'qcm' %}
+                            {% include 'exercise_types/qcm_preview.html' %}
+                        {% elif exercise.exercise_type == 'word_search' %}
+                            {% include 'exercise_types/word_search_preview.html' %}
+                        {% elif exercise.exercise_type == 'pairs' %}
+                            {% include 'exercise_types/pairs_preview.html' %}
+                        {% elif exercise.exercise_type == 'file' %}
+                            {% include 'exercise_types/file_preview.html' %}
+                        {% elif exercise.exercise_type == 'fill_in_blanks' %}
+                            {% include 'exercise_types/fill_in_blanks_preview.html' %}
+                        {% endif %}
+
+                        {% if not attempt and not current_user.is_teacher %}
+                            <div class="text-center mt-4">
+                                <button type="submit" class="btn btn-primary" id="submitBtn">
+                                    <i class="fas fa-check"></i> Valider mes réponses
+                                </button>
+                            </div>
+                        {% endif %}
+                    </form>
+
+                    {% if attempt %}
+                        <div class="mt-4">
+                            <h4>Résultat</h4>
+                            <div class="alert {% if attempt.score >= 70 %}alert-success{% else %}alert-warning{% endif %}">
+                                <p class="mb-0">
+                                    Score : {{ "%.1f"|format(attempt.score) }}%
+                                    {% if attempt.score >= 70 %}
+                                        <i class="fas fa-trophy text-warning"></i>
+                                    {% endif %}
+                                </p>
+                            </div>
+                            {% if attempt.feedback %}
+                                <div class="mt-3">
+                                    <h5>Feedback</h5>
+                                    <div class="feedback-content">
+                                        {{ attempt.get_feedback()|safe }}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
-
-    {% if current_user.is_teacher %}
-        <div class="card mb-4">
-            <div class="card-header bg-info text-white">
-                <h5 class="card-title mb-0">Mode enseignant - Aperçu de l'exercice</h5>
-            </div>
-            <div class="card-body">
-                {% if exercise.exercise_type == 'qcm' %}
-                    {% include 'exercise_types/qcm_preview.html' %}
-                {% elif exercise.exercise_type == 'word_search' %}
-                    {% include 'exercise_types/word_search_preview.html' %}
-                {% elif exercise.exercise_type == 'drag_and_drop' %}
-                    {% include 'exercise_types/drag_and_drop_preview.html' %}
-                {% elif exercise.exercise_type == 'fill_in_blanks' %}
-                    {% include 'exercise_types/fill_in_blanks_preview.html' %}
-                {% elif exercise.exercise_type == 'pairs' %}
-                    {% include 'exercise_types/pairs_preview.html' %}
-                {% endif %}
-            </div>
-        </div>
-    {% else %}
-        <div class="exercise-container">
-            {% if exercise.exercise_type == 'qcm' %}
-                {% include 'exercise_types/qcm_preview.html' %}
-            {% elif exercise.exercise_type == 'word_search' %}
-                {% include 'exercise_types/word_search_preview.html' %}
-            {% elif exercise.exercise_type == 'drag_and_drop' %}
-                {% include 'exercise_types/drag_and_drop_preview.html' %}
-            {% elif exercise.exercise_type == 'fill_in_blanks' %}
-                {% include 'exercise_types/fill_in_blanks_preview.html' %}
-            {% elif exercise.exercise_type == 'pairs' %}
-                {% include 'exercise_types/pairs_preview.html' %}
-            {% endif %}
-        </div>
-    {% endif %}
 </div>
+
+<style>
+.word-search-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    margin: 2rem auto;
+    padding: 0;
+    max-width: 100%;
+    justify-content: center;
+}
+
+.word-grid-container {
+    flex: 1;
+    min-width: 300px;
+    max-width: 800px;
+}
+
+.words-list-container {
+    flex: 0 0 250px;
+}
+
+.word-grid {
+    display: inline-block;
+    border: 2px solid #dee2e6;
+    padding: 1rem;
+    background-color: white;
+    user-select: none;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.grid-row {
+    display: flex;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+}
+
+.grid-cell {
+    width: 35px;
+    height: 35px;
+    border: 1px solid #dee2e6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin: 0;
+    padding: 0;
+    background-color: white;
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+    padding: 10px !important;
+    margin: 2px !important;
+}
+
+.grid-cell::before {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: -5px;
+    right: -5px;
+    bottom: -5px;
+    z-index: 1;
+}
+
+.grid-cell.possible {
+    background-color: #e3f2fd;
+    opacity: 0.7;
+}
+
+.grid-cell.selected {
+    background-color: #2196f3 !important;
+    color: white !important;
+    opacity: 1 !important;
+}
+
+.grid-cell.found {
+    background-color: #4caf50 !important;
+    color: white !important;
+    opacity: 1 !important;
+}
+
+.words-list-card {
+    background-color: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    position: sticky;
+    top: 1rem;
+}
+
+.words-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+}
+
+.word-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    background-color: white;
+    font-size: 1.1em;
+}
+
+.word-item.found {
+    background-color: #c8e6c9;
+}
+
+.word-found-icon {
+    opacity: 0;
+    transition: opacity 0.2s;
+    color: #4caf50;
+}
+
+.word-item.found .word-found-icon {
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .word-search-container {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .word-grid-container {
+        min-width: 100%;
+    }
+    
+    .words-list-container {
+        flex: none;
+        width: 100%;
+    }
+    
+    .grid-cell {
+        width: 30px;
+        height: 30px;
+        font-size: 1em;
+    }
+    
+    .words-list-card {
+        position: static;
+    }
+}
+</style>
 {% endblock %}
 
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const exerciseType = '{{ exercise.exercise_type }}';
-    const exerciseContent = {{ exercise.get_content()|tojson|safe }};
-    const form = document.getElementById('exerciseForm');
-    const answersContainer = document.getElementById('answersContainer');
+    console.log('DOMContentLoaded event fired');
+    const exerciseType = '{{ exercise.exercise_type }}'.trim();
+    console.log('Exercise type:', exerciseType);
     
-    function handleQCM() {
-        if (!exerciseContent.questions) return;
+    if (exerciseType.toLowerCase() === 'word_search') {
+        console.log('Initializing word search exercise');
+        const grid = document.getElementById('wordGrid');
+        const cells = document.querySelectorAll('.grid-cell');
+        const wordItems = document.querySelectorAll('.word-item');
+        const submitBtn = document.getElementById('submitBtn');
+        const foundWordsInput = document.getElementById('foundWordsInput');
         
-        exerciseContent.questions.forEach((question, index) => {
-            const questionDiv = document.createElement('div');
-            questionDiv.className = 'mb-3';
-            questionDiv.innerHTML = `
-                <input type="hidden" name="question_${index}" value="${question.question}">
-                <div class="form-group">
-                    <label class="form-label">${question.question}</label>
-                    ${question.options.map(option => `
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" 
-                                   name="answer_${index}" value="${option}" required>
-                            <label class="form-check-label">${option}</label>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-            answersContainer.appendChild(questionDiv);
+        // Créer une matrice de cellules pour un accès plus facile
+        const gridMatrix = [];
+        cells.forEach(cell => {
+            const row = parseInt(cell.dataset.row);
+            if (gridMatrix.length <= row) {
+                gridMatrix.push([]);
+            }
+            gridMatrix[row][parseInt(cell.dataset.col)] = cell;
         });
-    }
-
-    function handleWordSearch() {
-        const selectedWords = new Set();
-        const gridContainer = document.querySelector('.word-search-grid');
-        
-        if (!gridContainer) return;
         
         let isSelecting = false;
+        let selectedCells = [];
+        let foundWords = new Set();
         let startCell = null;
-        let currentSelection = [];
+        let lastCell = null;
         
-        function highlightCell(cell) {
-            cell.classList.add('selected');
-        }
-
-        function clearSelection() {
-            currentSelection.forEach(cell => cell.classList.remove('selected'));
-            currentSelection = [];
-        }
-
-        function isValidSelection(start, end) {
-            const startRow = parseInt(start.dataset.row, 10);
-            const startCol = parseInt(start.dataset.col, 10);
-            const endRow = parseInt(end.dataset.row, 10);
-            const endCol = parseInt(end.dataset.col, 10);
-            
-            return startRow === endRow || // Horizontale
-                   startCol === endCol || // Verticale
-                   Math.abs(endRow - startRow) === Math.abs(endCol - startCol); // Diagonale
-        }
-
-        function updateSelection(start, end) {
-            const cells = getCellsBetween(start, end);
-            cells.forEach(highlightCell);
-            currentSelection = cells;
-        }
-
-        function getCellsBetween(start, end) {
-            const cells = [];
-            const startRow = parseInt(start.dataset.row, 10);
-            const startCol = parseInt(start.dataset.col, 10);
-            const endRow = parseInt(end.dataset.row, 10);
-            const endCol = parseInt(end.dataset.col, 10);
-            
-            const rowDir = Math.sign(endRow - startRow) || 0;
-            const colDir = Math.sign(endCol - startCol) || 0;
-            
-            let currentRow = startRow;
-            let currentCol = startCol;
-            
-            while (true) {
-                const cell = document.querySelector(`.grid-cell[data-row="${currentRow}"][data-col="${currentCol}"]`);
-                if (cell) cells.push(cell);
-                
-                if (currentRow === endRow && currentCol === endCol) break;
-                
-                currentRow += rowDir;
-                currentCol += colDir;
-            }
-            
-            return cells;
-        }
-
         function getSelectedWord() {
-            return currentSelection
-                .map(cell => cell.textContent.trim())
-                .join('');
+            return selectedCells.map(cell => cell.textContent.trim()).join('');
         }
-
-        function markWordAsFound(wordElement) {
-            wordElement.classList.add('found');
+        
+        function clearSelection() {
+            cells.forEach(cell => {
+                cell.classList.remove('selected');
+                cell.classList.remove('possible');
+            });
+            selectedCells = [];
+            startCell = null;
+            lastCell = null;
         }
-
-        function updateAnswers() {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'found_words';
-            input.value = JSON.stringify(Array.from(selectedWords));
+        
+        function showPossibleMoves(currentCell) {
+            if (!currentCell) return;
             
-            const oldInput = form.querySelector('input[name="found_words"]');
-            if (oldInput) {
-                oldInput.remove();
-            }
-            form.appendChild(input);
-        }
-
-        gridContainer.addEventListener('mousedown', function(e) {
-            const cell = e.target.closest('.grid-cell');
-            if (cell) {
-                isSelecting = true;
-                startCell = cell;
-                currentSelection = [cell];
-                highlightCell(cell);
-            }
-        });
-
-        document.addEventListener('mousemove', function(e) {
-            if (!isSelecting) return;
+            const row = parseInt(currentCell.dataset.row);
+            const col = parseInt(currentCell.dataset.col);
             
-            const cell = e.target.closest('.grid-cell');
-            if (cell && cell !== currentSelection[currentSelection.length - 1]) {
-                if (isValidSelection(startCell, cell)) {
-                    clearSelection();
-                    updateSelection(startCell, cell);
-                }
-            }
-        });
-
-        document.addEventListener('mouseup', function() {
-            if (isSelecting) {
-                isSelecting = false;
-                const selectedWord = getSelectedWord();
-                if (selectedWord) {
-                    const wordElements = document.querySelectorAll('.word-list li');
-                    wordElements.forEach(el => {
-                        if (el.dataset.word === selectedWord) {
-                            selectedWords.add(selectedWord);
-                            markWordAsFound(el);
-                            updateAnswers();
-                        }
-                    });
-                }
-                clearSelection();
-            }
-        });
-    }
-
-    function handleDragAndDrop() {
-        const draggables = document.querySelectorAll('.draggable');
-        const dropZones = document.querySelectorAll('.drop-zone');
-        let draggedItem = null;
-
-        function updateDragDropAnswers() {
-            const answers = {};
-            dropZones.forEach(zone => {
-                const zoneId = zone.dataset.zone;
-                const item = zone.querySelector('.draggable');
-                if (item) {
-                    answers[zoneId] = item.dataset.value;
-                }
-            });
-            
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'answers';
-            input.value = JSON.stringify(answers);
-            
-            const oldInput = form.querySelector('input[name="answers"]');
-            if (oldInput) {
-                oldInput.remove();
-            }
-            form.appendChild(input);
-        }
-
-        draggables.forEach(draggable => {
-            draggable.addEventListener('dragstart', function() {
-                draggedItem = this;
-                setTimeout(() => this.classList.add('dragging'), 0);
-            });
-
-            draggable.addEventListener('dragend', function() {
-                this.classList.remove('dragging');
-            });
-        });
-
-        dropZones.forEach(zone => {
-            zone.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                this.classList.add('drag-over');
-            });
-
-            zone.addEventListener('dragleave', function() {
-                this.classList.remove('drag-over');
-            });
-
-            zone.addEventListener('drop', function(e) {
-                e.preventDefault();
-                this.classList.remove('drag-over');
+            // Si on a déjà au moins deux cellules, calculer la direction
+            if (selectedCells.length >= 2) {
+                const firstCell = selectedCells[0];
+                const lastCell = selectedCells[selectedCells.length - 1];
+                const rowDir = Math.sign(parseInt(lastCell.dataset.row) - parseInt(firstCell.dataset.row));
+                const colDir = Math.sign(parseInt(lastCell.dataset.col) - parseInt(firstCell.dataset.col));
                 
-                if (draggedItem) {
-                    const clone = draggedItem.cloneNode(true);
-                    const zoneContent = this.querySelector('.zone-content');
-                    if (zoneContent) {
-                        zoneContent.innerHTML = '';
-                        zoneContent.appendChild(clone);
+                // Montrer la prochaine cellule possible dans la même direction
+                const nextRow = row + rowDir;
+                const nextCol = col + colDir;
+                
+                if (nextRow >= 0 && nextRow < gridMatrix.length &&
+                    nextCol >= 0 && nextCol < gridMatrix[0].length) {
+                    const cell = gridMatrix[nextRow][nextCol];
+                    if (!cell.classList.contains('found') && !cell.classList.contains('selected')) {
+                        cell.classList.add('possible');
                     }
-                    draggedItem.remove();
-                    this.classList.add('has-item');
-                    updateDragDropAnswers();
                 }
+            } else {
+                // Pour la première ou deuxième cellule, montrer toutes les directions possibles
+                for (let dRow = -1; dRow <= 1; dRow++) {
+                    for (let dCol = -1; dCol <= 1; dCol++) {
+                        if (dRow === 0 && dCol === 0) continue;
+                        
+                        const newRow = row + dRow;
+                        const newCol = col + dCol;
+                        
+                        if (newRow >= 0 && newRow < gridMatrix.length &&
+                            newCol >= 0 && newCol < gridMatrix[0].length) {
+                            const cell = gridMatrix[newRow][newCol];
+                            if (!cell.classList.contains('found') && !cell.classList.contains('selected')) {
+                                cell.classList.add('possible');
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        function isValidNextCell(currentCell, nextCell) {
+            if (selectedCells.length < 2) return true;
+            
+            const firstCell = selectedCells[0];
+            const lastCell = selectedCells[selectedCells.length - 1];
+            
+            const baseRowDir = Math.sign(parseInt(lastCell.dataset.row) - parseInt(firstCell.dataset.row));
+            const baseColDir = Math.sign(parseInt(lastCell.dataset.col) - parseInt(firstCell.dataset.col));
+            
+            const nextRowDir = Math.sign(parseInt(nextCell.dataset.row) - parseInt(currentCell.dataset.row));
+            const nextColDir = Math.sign(parseInt(nextCell.dataset.col) - parseInt(currentCell.dataset.col));
+            
+            return baseRowDir === nextRowDir && baseColDir === nextColDir;
+        }
+        
+        function handleCellSelection(cell) {
+            if (!isSelecting || cell.classList.contains('found')) return;
+            
+            // Première cellule
+            if (selectedCells.length === 0) {
+                cell.classList.add('selected');
+                selectedCells.push(cell);
+                startCell = cell;
+                lastCell = cell;
+                showPossibleMoves(cell);
+                return;
+            }
+            
+            // Vérifier si la cellule est adjacente à la dernière cellule sélectionnée
+            const currentRow = parseInt(lastCell.dataset.row);
+            const currentCol = parseInt(lastCell.dataset.col);
+            const nextRow = parseInt(cell.dataset.row);
+            const nextCol = parseInt(cell.dataset.col);
+            
+            const rowDiff = Math.abs(nextRow - currentRow);
+            const colDiff = Math.abs(nextCol - currentCol);
+            
+            if ((rowDiff <= 1 && colDiff <= 1) && isValidNextCell(lastCell, cell)) {
+                if (!selectedCells.includes(cell)) {
+                    cell.classList.add('selected');
+                    selectedCells.push(cell);
+                    lastCell = cell;
+                    
+                    // Effacer les cellules possibles précédentes
+                    cells.forEach(c => c.classList.remove('possible'));
+                    showPossibleMoves(cell);
+                }
+            }
+        }
+        
+        function markWordAsFound(word) {
+            selectedCells.forEach(cell => {
+                cell.classList.remove('selected');
+                cell.classList.remove('possible');
+                cell.classList.add('found');
+            });
+            
+            const wordItem = Array.from(wordItems).find(item => 
+                item.dataset.word.toLowerCase() === word.toLowerCase()
+            );
+            
+            if (wordItem) {
+                wordItem.classList.add('found');
+                wordItem.querySelector('.word-found-icon i').style.display = 'inline-block';
+            }
+            
+            foundWords.add(word);
+            foundWordsInput.value = Array.from(foundWords).join(',');
+            
+            if (submitBtn) {
+                submitBtn.disabled = foundWords.size === 0;
+            }
+        }
+        
+        function checkWord(word) {
+            const wordsList = Array.from(wordItems).map(item => 
+                item.dataset.word.toLowerCase()
+            );
+            return wordsList.includes(word.toLowerCase());
+        }
+        
+        // Gestionnaires d'événements
+        cells.forEach(cell => {
+            ['mousedown', 'touchstart'].forEach(eventType => {
+                cell.addEventListener(eventType, (e) => {
+                    e.preventDefault();
+                    isSelecting = true;
+                    clearSelection();
+                    handleCellSelection(cell);
+                });
+            });
+            
+            ['mouseenter', 'touchmove'].forEach(eventType => {
+                cell.addEventListener(eventType, (e) => {
+                    if (eventType === 'touchmove') {
+                        e.preventDefault();
+                        const touch = e.touches[0];
+                        const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                        if (target && target.classList.contains('grid-cell')) {
+                            handleCellSelection(target);
+                        }
+                    } else if (isSelecting) {
+                        handleCellSelection(cell);
+                    }
+                });
             });
         });
-    }
-
-    function handleFillInBlanks() {
-        const blanks = document.querySelectorAll('.blank');
-        const answers = {};
-
-        blanks.forEach(blank => {
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.name = `answer_${blank.dataset.index}`;
-            input.required = true;
-            blank.appendChild(input);
-
-            input.addEventListener('input', function() {
-                answers[blank.dataset.index] = this.value;
-                const inputElement = document.createElement('input');
-                inputElement.type = 'hidden';
-                inputElement.name = 'answers';
-                inputElement.value = JSON.stringify(answers);
+        
+        ['mouseup', 'touchend'].forEach(eventType => {
+            document.addEventListener(eventType, () => {
+                if (!isSelecting) return;
+                isSelecting = false;
                 
-                const oldInput = form.querySelector('input[name="answers"]');
-                if (oldInput) {
-                    oldInput.remove();
+                const selectedWord = getSelectedWord();
+                if (checkWord(selectedWord)) {
+                    markWordAsFound(selectedWord);
+                } else if (checkWord(selectedWord.split('').reverse().join(''))) {
+                    markWordAsFound(selectedWord.split('').reverse().join(''));
+                } else {
+                    clearSelection();
                 }
-                form.appendChild(inputElement);
             });
         });
-    }
-
-    // Initialisation en fonction du type d'exercice
-    switch (exerciseType) {
-        case 'qcm':
-            handleQCM();
-            break;
-        case 'word_search':
-            handleWordSearch();
-            break;
-        case 'drag_and_drop':
-            handleDragAndDrop();
-            break;
-        case 'fill_in_blanks':
-            handleFillInBlanks();
-            break;
     }
 });
 </script>

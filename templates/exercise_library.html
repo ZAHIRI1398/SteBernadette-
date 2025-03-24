@@ -1,124 +1,116 @@
 {% extends "base.html" %}
 
-{% block title %}Bibliothèque d'exercices - Saint Bernadette{% endblock %}
-
 {% block content %}
 <div class="container mt-4">
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{{ url_for('teacher_dashboard') }}">Tableau de bord</a></li>
-            <li class="breadcrumb-item active">Bibliothèque d'exercices</li>
-        </ol>
-    </nav>
+    <div class="row">
+        <div class="col-12">
+            <h2 class="mb-4">Bibliothèque d'exercices</h2>
 
-    <div class="card">
-        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-            <h2 class="card-title mb-0">Bibliothèque d'exercices</h2>
-            {% if current_user.is_teacher %}
-            <a href="{{ url_for('create_exercise') }}" class="btn btn-light">
-                <i class="fas fa-plus"></i> Créer un exercice
-            </a>
-            {% endif %}
-        </div>
-        
-        <div class="card-body">
-            <form method="get" action="{{ url_for('exercise_library') }}" class="mb-4">
-                <div class="row g-3">
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label for="subject">Matière</label>
-                            <select class="form-select" id="subject" name="subject">
-                                <option value="">Toutes les matières</option>
-                                <option value="mathematiques">Mathématiques</option>
-                                <option value="francais">Français</option>
-                                <option value="histoire">Histoire</option>
-                                <option value="geographie">Géographie</option>
-                                <option value="sciences">Sciences</option>
-                                <option value="anglais">Anglais</option>
-                                <option value="technologie">Technologie</option>
-                                <option value="arts">Arts plastiques</option>
-                                <option value="musique">Éducation musicale</option>
-                                <option value="eps">EPS</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label for="level">Niveau</label>
-                            <select class="form-select" id="level" name="level">
-                                <option value="">Tous les niveaux</option>
-                                <option value="6">6ème</option>
-                                <option value="5">5ème</option>
-                                <option value="4">4ème</option>
-                                <option value="3">3ème</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label for="exercise_type">Type d'exercice</label>
-                            <select class="form-select" id="exercise_type" name="type">
-                                <option value="">Tous les types</option>
-                                {% for type_code, type_name in exercise_types %}
-                                <option value="{{ type_code }}" {% if request.args.get('type') == type_code %}selected{% endif %}>{{ type_name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label for="search">Rechercher</label>
+            <!-- Filtres -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('exercise_library') }}" class="row g-3">
+                        <div class="col-md-4">
                             <div class="input-group">
-                                <input type="text" class="form-control" id="search" name="search" value="{{ request.args.get('search', '') }}" placeholder="Rechercher...">
-                                <button type="submit" class="btn btn-primary">
+                                <input type="text" 
+                                       class="form-control" 
+                                       name="search" 
+                                       placeholder="Rechercher un exercice..."
+                                       value="{{ search_query }}">
+                                <button class="btn btn-outline-secondary" type="submit">
                                     <i class="fas fa-search"></i>
                                 </button>
                             </div>
                         </div>
-                    </div>
+                        <div class="col-md-3">
+                            <select class="form-select" name="type">
+                                <option value="">Tous les types</option>
+                                {% for type_id, type_name in exercise_types %}
+                                    <option value="{{ type_id }}" {% if type_id == selected_type %}selected{% endif %}>
+                                        {{ type_name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" name="subject">
+                                <option value="">Toutes les matières</option>
+                                <option value="math" {% if selected_subject == 'math' %}selected{% endif %}>Mathématiques</option>
+                                <option value="french" {% if selected_subject == 'french' %}selected{% endif %}>Français</option>
+                                <option value="history" {% if selected_subject == 'history' %}selected{% endif %}>Histoire</option>
+                                <option value="geography" {% if selected_subject == 'geography' %}selected{% endif %}>Géographie</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-filter"></i> Filtrer
+                            </button>
+                        </div>
+                    </form>
                 </div>
-            </form>
+            </div>
 
             <!-- Liste des exercices -->
             <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-                {% if exercises %}
-                    {% for exercise in exercises %}
+                {% for exercise in exercises %}
                     <div class="col">
                         <div class="card h-100">
-                            <div class="card-header">
-                                <span class="badge bg-primary">{{ dict(exercise_types)[exercise.exercise_type] }}</span>
-                                {% if exercise.teacher_id == current_user.id %}
-                                <span class="badge bg-secondary">Mes exercices</span>
-                                {% endif %}
-                            </div>
                             <div class="card-body">
                                 <h5 class="card-title">{{ exercise.title }}</h5>
-                                <p class="card-text">{{ exercise.description }}</p>
+                                {% if exercise.description %}
+                                    <p class="card-text">{{ exercise.description }}</p>
+                                {% endif %}
+                                <div class="d-flex align-items-center mb-3">
+                                    <span class="badge bg-primary me-2">
+                                        {% if exercise.exercise_type == 'qcm' %}
+                                            <i class="fas fa-tasks"></i> QCM
+                                        {% elif exercise.exercise_type == 'word_search' %}
+                                            <i class="fas fa-search"></i> Mots mêlés
+                                        {% elif exercise.exercise_type == 'pairs' %}
+                                            <i class="fas fa-link"></i> Paires
+                                        {% elif exercise.exercise_type == 'fill_in_blanks' %}
+                                            <i class="fas fa-pencil-alt"></i> Texte à trous
+                                        {% elif exercise.exercise_type == 'file' %}
+                                            <i class="fas fa-file"></i> Fichier
+                                        {% endif %}
+                                    </span>
+                                    {% if exercise.subject %}
+                                        <span class="badge bg-secondary">{{ exercise.subject }}</span>
+                                    {% endif %}
+                                </div>
                             </div>
-                            <div class="card-footer">
-                                <div class="btn-group">
-                                    <a href="{{ url_for('view_exercise', exercise_id=exercise.id) }}" class="btn btn-sm btn-outline-primary">
+                            <div class="card-footer bg-transparent">
+                                <div class="btn-group w-100">
+                                    <a href="{{ url_for('view_exercise', exercise_id=exercise.id) }}" 
+                                       class="btn btn-outline-primary">
                                         <i class="fas fa-eye"></i> Voir
                                     </a>
-                                    {% if exercise.teacher_id == current_user.id %}
-                                    <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-sm btn-outline-secondary">
-                                        <i class="fas fa-edit"></i> Modifier
-                                    </a>
+                                    {% if current_user.is_teacher %}
+                                        <a href="{{ url_for('quick_add_exercise', exercise_id=exercise.id) }}"
+                                           class="btn btn-outline-success">
+                                            <i class="fas fa-plus"></i> Ajouter
+                                        </a>
                                     {% endif %}
                                 </div>
                             </div>
                         </div>
                     </div>
-                    {% endfor %}
                 {% else %}
                     <div class="col-12">
                         <div class="alert alert-info">
-                            <i class="fas fa-info-circle"></i> Aucun exercice trouvé. 
-                            <a href="{{ url_for('create_exercise') }}" class="alert-link">Créez votre premier exercice</a> !
+                            Aucun exercice trouvé. {% if current_user.is_teacher %}<a href="{{ url_for('create_exercise') }}">Créer un exercice</a>{% endif %}
                         </div>
                     </div>
-                {% endif %}
+                {% endfor %}
             </div>
+
+            {% if current_user.is_teacher %}
+                <div class="text-center mt-4">
+                    <a href="{{ url_for('create_exercise') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-plus"></i> Créer un nouvel exercice
+                    </a>
+                </div>
+            {% endif %}
         </div>
     </div>
 </div>

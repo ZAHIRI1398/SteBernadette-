@@ -1,146 +1,71 @@
-{% set content = exercise.get_content() %}
 {% if content and content.questions %}
-    <form id="exerciseForm" method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="qcm-container">
-            {% for question in content.questions %}
-                {% set question_index = loop.index0 %}
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h5 class="card-title">Question {{ loop.index }}</h5>
-                        <p class="question-text">{{ question }}</p>
-                        
-                        <div class="options-list">
-                            {% for option in content.options[question_index] %}
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="radio" 
-                                           name="answer_{{ question_index }}" 
-                                           id="option_{{ question_index }}_{{ loop.index0 }}"
-                                           value="{{ option }}"
-                                           required>
-                                    <label class="form-check-label" for="option_{{ question_index }}_{{ loop.index0 }}">
-                                        {{ option }}
-                                    </label>
-                                </div>
-                            {% endfor %}
-                        </div>
+<div class="qcm-container">
+    {% for question in content.questions %}
+        <div class="question-block mb-4">
+            <p class="question-text mb-3">{{ question.question }}</p>
+            <div class="options-list">
+                {% for option in question.options %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" 
+                               name="answer_{{ loop.index0 }}" 
+                               id="option_{{ loop.index0 }}_{{ loop.index }}"
+                               value="{{ option }}"
+                               {% if attempt and attempt.answers[loop.index0] == option %}checked{% endif %}
+                               {% if attempt %}disabled{% endif %}>
+                        <label class="form-check-label" for="option_{{ loop.index0 }}_{{ loop.index }}">
+                            {{ option }}
+                        </label>
                     </div>
-                </div>
-            {% endfor %}
-
-            <div class="text-center mt-4 mb-4">
-                <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
-                    Valider mes réponses
-                </button>
+                {% endfor %}
             </div>
+            
+            {% if attempt %}
+                <div class="mt-3">
+                    {% if attempt.answers[loop.index0] == question.correct %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check"></i> Correct !
+                        </div>
+                    {% else %}
+                        <div class="alert alert-danger">
+                            <i class="fas fa-times"></i> Incorrect. La bonne réponse était : {{ question.correct }}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
         </div>
-    </form>
-
-    <style>
-    .qcm-container {
-        max-width: 800px;
-        margin: 0 auto;
-    }
-
-    .question-text {
-        font-size: 1.1rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .options-list {
-        padding-left: 1rem;
-    }
-
-    .form-check {
-        margin-bottom: 1rem;
-    }
-
-    .form-check-input {
-        cursor: pointer;
-    }
-
-    .form-check-label {
-        cursor: pointer;
-        padding-left: 0.5rem;
-    }
-
-    .btn-primary {
-        padding: 0.75rem 2rem;
-    }
-    </style>
-
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.getElementById('exerciseForm');
-        const radioGroups = document.querySelectorAll('.options-list');
-        const submitBtn = document.getElementById('submitBtn');
-
-        // Fonction pour vérifier si toutes les questions ont une réponse
-        function checkAllAnswered() {
-            let allAnswered = true;
-            radioGroups.forEach(group => {
-                const radios = group.querySelectorAll('input[type="radio"]');
-                const isAnswered = Array.from(radios).some(radio => radio.checked);
-                if (!isAnswered) {
-                    allAnswered = false;
-                }
-            });
-            return allAnswered;
-        }
-
-        // Mettre à jour l'état du bouton
-        function updateSubmitButton() {
-            const allAnswered = checkAllAnswered();
-            submitBtn.disabled = !allAnswered;
-            if (allAnswered) {
-                submitBtn.classList.remove('btn-secondary');
-                submitBtn.classList.add('btn-primary');
-            } else {
-                submitBtn.classList.remove('btn-primary');
-                submitBtn.classList.add('btn-secondary');
-            }
-        }
-
-        // Écouter les changements de réponses
-        radioGroups.forEach(group => {
-            group.addEventListener('change', function() {
-                updateSubmitButton();
-            });
-        });
-
-        // Vérifier avant la soumission
-        form.addEventListener('submit', function(e) {
-            if (!checkAllAnswered()) {
-                e.preventDefault();
-                alert('Veuillez répondre à toutes les questions avant de valider.');
-            } else {
-                // Préparer les réponses pour l'envoi
-                const answers = {};
-                radioGroups.forEach((group, index) => {
-                    const checkedRadio = group.querySelector('input[type="radio"]:checked');
-                    if (checkedRadio) {
-                        answers[index] = checkedRadio.value;
-                    }
-                });
-                
-                // Créer un champ caché pour les réponses
-                let answersInput = form.querySelector('input[name="answers"]');
-                if (!answersInput) {
-                    answersInput = document.createElement('input');
-                    answersInput.type = 'hidden';
-                    answersInput.name = 'answers';
-                    form.appendChild(answersInput);
-                }
-                answersInput.value = JSON.stringify(answers);
-            }
-        });
-
-        // Initialiser l'état du bouton
-        updateSubmitButton();
-    });
-    </script>
+    {% endfor %}
+</div>
 {% else %}
-    <div class="alert alert-warning">
-        Cet exercice n'a pas encore de contenu défini.
-    </div>
+<div class="alert alert-warning">
+    Aucune question n'a été définie pour cet exercice.
+</div>
 {% endif %}
+
+<style>
+.qcm-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.options-list {
+    margin-top: 1rem;
+}
+
+.form-check {
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s;
+}
+
+.form-check:hover {
+    background-color: #f8f9fa;
+}
+
+.form-check-input:checked + .form-check-label {
+    font-weight: bold;
+}
+
+.alert {
+    margin-bottom: 0;
+}
+</style>

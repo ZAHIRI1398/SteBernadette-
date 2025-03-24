@@ -1,225 +1,156 @@
-{% set content = exercise.get_content() %}
-{% if content and content.sentence and content.words %}
-    <form id="exerciseForm" method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="fill-in-blanks-container">
+{% if content and content.sentence %}
+    <div class="fill-in-blanks-container">
+        <form method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
             <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Complétez les phrases</h5>
+                </div>
                 <div class="card-body">
-                    <div class="sentence-container mb-4">
-                        {% set sentences = content.sentence.split('\r\n') %}
-                        {% for sentence in sentences %}
-                            <p class="sentence mb-3">{{ sentence|replace('___', '<span class="blank" data-index="' ~ loop.index0 ~ '"></span>')|safe }}</p>
+                    <div class="sentence-container">
+                        {% set lines = content.sentence.split('\r\n') %}
+                        {% for line in lines %}
+                            <div class="sentence-line mb-3">
+                                {% set parts = line.split('___') %}
+                                {% for part in parts %}
+                                    {{ part }}
+                                    {% if not loop.last %}
+                                        <input type="text" 
+                                               name="answers[]" 
+                                               class="form-control d-inline-block answer-input"
+                                               {% if attempt %}
+                                                   value="{{ attempt.answers[loop.index0] }}"
+                                                   disabled
+                                               {% endif %}
+                                               required>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
                         {% endfor %}
                     </div>
 
-                    <div class="words-container">
-                        <h5 class="mb-3">Mots à placer :</h5>
-                        <div class="words-list" id="wordsList">
-                            {% for word in content.words %}
-                                <span class="word-badge" draggable="true" data-word="{{ word }}">{{ word }}</span>
+                    {% if content.words %}
+                        <div class="mt-4">
+                            <h6>Mots à utiliser :</h6>
+                            <div class="word-bank">
+                                {% for word in content.words %}
+                                    <span class="word-item">{{ word }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {% if attempt %}
+                        <div class="mt-4">
+                            <h6>Résultats :</h6>
+                            {% for answer, correct in attempt.results.items() %}
+                                <div class="alert {% if correct %}alert-success{% else %}alert-danger{% endif %} mb-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>Réponse {{ loop.index }} : {{ answer }}</div>
+                                        <div>
+                                            {% if correct %}
+                                                <i class="fas fa-check text-success"></i> Correct
+                                            {% else %}
+                                                <i class="fas fa-times text-danger"></i> Incorrect
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
                             {% endfor %}
                         </div>
-                    </div>
+                    {% endif %}
                 </div>
             </div>
 
-            <div class="text-center mt-4">
-                <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
-                    Valider mes réponses
-                </button>
-            </div>
-        </div>
-    </form>
+            {% if not attempt %}
+                <div class="text-center mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-check"></i> Valider mes réponses
+                    </button>
+                </div>
+            {% endif %}
+        </form>
+    </div>
+{% else %}
+    <div class="alert alert-warning">
+        Aucune phrase n'a été définie pour cet exercice.
+    </div>
+{% endif %}
 
-    <style>
-    .fill-in-blanks-container {
-        max-width: 800px;
-        margin: 0 auto;
-    }
+<style>
+.fill-in-blanks-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
 
-    .sentence {
-        font-size: 1.1rem;
-        line-height: 1.6;
-        margin-bottom: 1rem;
-    }
+.sentence-line {
+    font-size: 1.1rem;
+    line-height: 1.6;
+}
 
-    .blank {
-        display: inline-block;
-        width: 100px;
-        height: 30px;
-        border: 2px dashed #ccc;
-        border-radius: 4px;
-        margin: 0 5px;
-        vertical-align: middle;
-        background-color: #f8f9fa;
-        transition: all 0.2s;
-    }
+.answer-input {
+    width: 120px !important;
+    margin: 0 0.5rem;
+}
 
-    .blank.drag-over {
-        border-color: #2196f3;
-        background-color: #e3f2fd;
-    }
+.word-bank {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
 
-    .blank.filled {
-        border-style: solid;
-        border-color: #4caf50;
-        background-color: #f1f8e9;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0 10px;
-    }
+.word-item {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
 
-    .words-container {
-        background-color: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 8px;
-    }
+.word-item:hover {
+    background-color: #dee2e6;
+}
 
-    .words-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
+.word-item.used {
+    opacity: 0.5;
+    text-decoration: line-through;
+}
+</style>
 
-    .word-badge {
-        display: inline-block;
-        padding: 6px 12px;
-        background-color: white;
-        border: 1px solid #dee2e6;
-        border-radius: 20px;
-        font-size: 0.9rem;
-        color: #495057;
-        cursor: grab;
-        transition: all 0.2s;
-        user-select: none;
-    }
-
-    .word-badge:hover {
-        background-color: #e9ecef;
-        transform: translateY(-2px);
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-
-    .word-badge.dragging {
-        opacity: 0.5;
-        cursor: grabbing;
-    }
-
-    .word-badge.placed {
-        display: none;
-    }
-    </style>
-
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const wordsList = document.getElementById('wordsList');
-        const words = document.querySelectorAll('.word-badge');
-        const blanks = document.querySelectorAll('.blank');
-        const form = document.getElementById('exerciseForm');
-        let draggingWord = null;
-
-        // Pour chaque mot
-        words.forEach(word => {
-            word.addEventListener('dragstart', function(e) {
-                draggingWord = word;
-                word.classList.add('dragging');
-                e.dataTransfer.setData('text/plain', word.dataset.word);
-            });
-
-            word.addEventListener('dragend', function() {
-                word.classList.remove('dragging');
-                draggingWord = null;
-            });
-        });
-
-        // Pour chaque espace vide
-        blanks.forEach(blank => {
-            blank.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                if (!blank.classList.contains('filled')) {
-                    blank.classList.add('drag-over');
-                }
-            });
-
-            blank.addEventListener('dragleave', function() {
-                blank.classList.remove('drag-over');
-            });
-
-            blank.addEventListener('drop', function(e) {
-                e.preventDefault();
-                blank.classList.remove('drag-over');
-                
-                if (!blank.classList.contains('filled') && draggingWord) {
-                    const word = e.dataTransfer.getData('text/plain');
-                    blank.textContent = word;
-                    blank.classList.add('filled');
-                    draggingWord.classList.add('placed');
-                    updateAnswers();
-                }
-            });
-
-            // Double-clic pour retirer un mot
-            blank.addEventListener('dblclick', function() {
-                if (blank.classList.contains('filled')) {
-                    const word = blank.textContent;
-                    const wordBadge = Array.from(words).find(w => w.dataset.word === word);
-                    if (wordBadge) {
-                        wordBadge.classList.remove('placed');
-                    }
-                    blank.textContent = '';
-                    blank.classList.remove('filled');
-                    updateAnswers();
-                }
-            });
-        });
-
-        // Fonction pour mettre à jour les réponses
-        function updateAnswers() {
-            const answers = {};
-            blanks.forEach((b, index) => {
-                if (b.classList.contains('filled')) {
-                    answers[index] = b.textContent;
-                }
-            });
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const wordItems = document.querySelectorAll('.word-item');
+    const answerInputs = document.querySelectorAll('.answer-input');
+    
+    wordItems.forEach(word => {
+        word.addEventListener('click', function() {
+            if (this.classList.contains('used')) return;
             
-            let answersInput = form.querySelector('input[name="answers"]');
-            if (!answersInput) {
-                answersInput = document.createElement('input');
-                answersInput.type = 'hidden';
-                answersInput.name = 'answers';
-                form.appendChild(answersInput);
-            }
-            answersInput.value = JSON.stringify(answers);
-
-            // Activer/désactiver le bouton selon si tous les espaces sont remplis
-            const submitBtn = document.getElementById('submitBtn');
-            const allFilled = Array.from(blanks).every(b => b.classList.contains('filled'));
-            submitBtn.disabled = !allFilled;
-            if (allFilled) {
-                submitBtn.classList.remove('btn-secondary');
-                submitBtn.classList.add('btn-primary');
-            } else {
-                submitBtn.classList.remove('btn-primary');
-                submitBtn.classList.add('btn-secondary');
-            }
-        }
-
-        // Initialiser l'état du bouton
-        updateAnswers();
-
-        // Empêcher la soumission si tous les espaces ne sont pas remplis
-        form.addEventListener('submit', function(e) {
-            const allFilled = Array.from(blanks).every(b => b.classList.contains('filled'));
-            if (!allFilled) {
-                e.preventDefault();
-                alert('Veuillez remplir tous les espaces avant de valider.');
+            // Trouver le premier champ vide
+            const emptyInput = Array.from(answerInputs).find(input => !input.value);
+            if (emptyInput) {
+                emptyInput.value = this.textContent;
+                this.classList.add('used');
             }
         });
     });
-    </script>
-{% else %}
-    <div class="alert alert-warning">
-        Cet exercice n'a pas encore de contenu défini.
-    </div>
-{% endif %}
+    
+    answerInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            // Si le champ est vidé, réactiver le mot correspondant
+            if (!this.value) {
+                const word = Array.from(wordItems).find(w => w.classList.contains('used') && w.textContent === this.dataset.lastValue);
+                if (word) {
+                    word.classList.remove('used');
+                }
+            }
+            this.dataset.lastValue = this.value;
+        });
+    });
+});
+</script>
