@@ -167,6 +167,83 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialiser l'affichage
     toggleSections();
+
+    // Gestion des options QCM
+    document.querySelectorAll('.add-option').forEach(button => {
+        button.addEventListener('click', function() {
+            const optionsContainer = this.closest('.mb-3').querySelector('.options-container');
+            const questionIndex = this.closest('.question-block').dataset.questionIndex;
+            const optionsCount = optionsContainer.children.length;
+            
+            const newOption = document.createElement('div');
+            newOption.className = 'input-group mb-2';
+            newOption.innerHTML = `
+                <input type="text" class="form-control" name="questions[${questionIndex}][options][]" required>
+                <div class="input-group-text">
+                    <input type="radio" name="questions[${questionIndex}][correct]" value="${optionsCount}" required>
+                </div>
+                <button type="button" class="btn btn-danger remove-option">×</button>
+            `;
+            
+            optionsContainer.appendChild(newOption);
+        });
+    });
+
+    // Gestion de la suppression des options
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-option')) {
+            const optionDiv = e.target.closest('.input-group');
+            const optionsContainer = optionDiv.parentElement;
+            const questionBlock = optionsContainer.closest('.question-block');
+            const questionIndex = questionBlock.dataset.questionIndex;
+            
+            // Ne pas supprimer si c'est la dernière option
+            if (optionsContainer.children.length > 1) {
+                optionDiv.remove();
+                
+                // Mettre à jour les valeurs des boutons radio
+                const options = optionsContainer.children;
+                for (let i = 0; i < options.length; i++) {
+                    const radio = options[i].querySelector('input[type="radio"]');
+                    radio.value = i;
+                }
+            }
+        }
+    });
+
+    // Gestion de l'ajout de questions
+    document.querySelector('.add-question').addEventListener('click', function() {
+        const questionsContainer = document.querySelector('.questions-container');
+        const questionCount = questionsContainer.children.length;
+        const newQuestionBlock = document.createElement('div');
+        newQuestionBlock.className = 'question-block mb-4';
+        newQuestionBlock.dataset.questionIndex = questionCount;
+        
+        newQuestionBlock.innerHTML = `
+            <h4>Question ${questionCount + 1}</h4>
+            <div class="mb-3">
+                <label class="form-label">Question</label>
+                <input type="text" class="form-control" name="questions[${questionCount}][question]" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Options</label>
+                <div class="options-container">
+                    <div class="input-group mb-2">
+                        <input type="text" class="form-control" name="questions[${questionCount}][options][]" required>
+                        <div class="input-group-text">
+                            <input type="radio" name="questions[${questionCount}][correct]" value="0" required>
+                        </div>
+                        <button type="button" class="btn btn-danger remove-option">×</button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm add-option">
+                    <i class="fas fa-plus"></i> Ajouter une option
+                </button>
+            </div>
+        `;
+        
+        questionsContainer.appendChild(newQuestionBlock);
+    });
     
     // Validation du formulaire
     exerciseForm.addEventListener('submit', function(e) {

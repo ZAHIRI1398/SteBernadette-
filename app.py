@@ -507,7 +507,7 @@ def edit_exercise(exercise_id):
                 question = {
                     'question': request.form.get(f'question_{i}'),
                     'options': request.form.getlist(f'options_{i}[]'),
-                    'correct': request.form.get(f'correct_{i}')
+                    'correct': int(request.form.get(f'correct_{i}'))  # Stocker l'index au lieu de la valeur
                 }
                 if question['question'] and question['options'] and question['correct']:
                     questions.append(question)
@@ -1243,7 +1243,7 @@ def create_exercise():
                     questions.append({
                         'question': question_text,
                         'options': options,
-                        'correct': options[correct_index]
+                        'correct': int(correct_index)  # Stocker l'index au lieu de la valeur
                     })
                 
                 exercise.content = json.dumps({'questions': questions})
@@ -1342,23 +1342,24 @@ def create_exercise():
                 })
             
             elif exercise_type == 'fill_in_blanks':
-                sentence = request.form.get('sentence', '').strip()
-                words_text = request.form.get('words', '').strip()
-                words = [w.strip() for w in words_text.splitlines() if w.strip()]
+                text = request.form.get('text', '').strip()
+                answers = request.form.get('answers', '').strip()
                 
-                if not sentence or not words:
-                    flash('La phrase et les mots sont requis pour un exercice à trous.', 'error')
+                if not text or not answers:
+                    flash('Le texte et les réponses sont requis pour un exercice à trous.', 'error')
                     return redirect(request.url)
                 
-                # Vérifier que le nombre de trous correspond au nombre de mots
-                holes = sentence.count('___')
-                if holes != len(words):
-                    flash(f'Le nombre de trous ({holes}) ne correspond pas au nombre de mots ({len(words)}).', 'error')
+                # Vérifier que le nombre de trous correspond au nombre de réponses
+                holes = text.count('[...]')
+                answers_list = [a.strip() for a in answers.split(',') if a.strip()]
+                
+                if holes != len(answers_list):
+                    flash(f'Le nombre de trous ({holes}) ne correspond pas au nombre de réponses ({len(answers_list)}).', 'error')
                     return redirect(url_for('create_exercise'))
                 
                 exercise.content = json.dumps({
-                    'sentence': sentence,
-                    'words': words
+                    'text': text,
+                    'answers': answers_list
                 })
             
             # Sauvegarder l'exercice
@@ -1524,7 +1525,7 @@ def submit_exercise(exercise_id):
             answer = request.form.get(f'answer_{i}')
             answers.append(answer)
             
-            if answer == content['questions'][i]['correct']:
+            if answer == content['questions'][i]['options'][content['questions'][i]['correct']]:
                 correct_answers += 1
                 feedback.append({
                     'question': i + 1,
@@ -1535,7 +1536,7 @@ def submit_exercise(exercise_id):
                 feedback.append({
                     'question': i + 1,
                     'correct': False,
-                    'message': f'La réponse correcte était : {content["questions"][i]["correct"]}'
+                    'message': f'La réponse correcte était : {content["questions"][i]["options"][content["questions"][i]["correct"]]}'
                 })
         
         score = (correct_answers / total_questions) * 100 if total_questions > 0 else 0
@@ -1720,7 +1721,7 @@ def submit_answer(exercise_id):
         
         for i, question in enumerate(content['questions']):
             student_answer = request.form.get(f'q{i}')
-            correct_answer = question['correct']
+            correct_answer = content['questions'][i]['options'][content['questions'][i]['correct']]
             
             is_correct = student_answer == correct_answer
             answers[f'q{i}'] = student_answer
