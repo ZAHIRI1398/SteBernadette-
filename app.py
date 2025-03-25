@@ -1488,74 +1488,116 @@ def get_class_courses_api(class_id):
 @login_required
 def submit_exercise(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
-    course_id = request.form.get('course_id')
+    course_id = request.args.get('course_id', type=int)
     
+    # Si l'utilisateur est un enseignant, rediriger vers la bibliothèque d'exercices
+    if current_user.is_teacher:
+        flash("Les enseignants ne peuvent pas soumettre d'exercices.", "error")
+        return redirect(url_for('exercise_library'))
+    
+    # Si c'est un étudiant, vérifier qu'il a accès à l'exercice via un cours
     if not course_id:
-        flash('Erreur: Cours non spécifié', 'error')
-        return redirect(url_for('student_classes'))
-    
-    # Vérifier que l'étudiant a accès à ce cours
+        flash("Vous devez accéder aux exercices via vos cours.", "error")
+        return redirect(url_for('view_student_classes'))
+        
     course = Course.query.get_or_404(course_id)
     if not current_user.is_enrolled(course.class_obj.id):
-        flash('Vous n\'avez pas accès à cet exercice.', 'error')
-        return redirect(url_for('student_classes'))
-    
+        flash("Vous n'avez pas accès à cet exercice.", "error")
+        return redirect(url_for('view_student_classes'))
+        
     # Vérifier que l'exercice fait partie du cours
     if exercise not in course.exercises:
-        flash('Cet exercice ne fait pas partie du cours.', 'error')
+        flash("Cet exercice ne fait pas partie du cours.", "error")
         return redirect(url_for('view_course', course_id=course_id))
     
-    # Vérifier le nombre de tentatives restantes
-    progress = exercise.get_student_progress(current_user.id)
-    if exercise.max_attempts and progress and progress['remaining_attempts'] is not None and progress['remaining_attempts'] <= 0:
-        flash('Vous avez atteint le nombre maximum de tentatives pour cet exercice.', 'error')
+    # Vérifier le nombre de tentatives
+    attempts = ExerciseAttempt.query.filter_by(
+        student_id=current_user.id,
+        exercise_id=exercise_id,
+        course_id=course_id
+    ).count()
+    
+    if attempts >= exercise.max_attempts:
+        flash(f"Vous avez atteint le nombre maximum de tentatives ({exercise.max_attempts}) pour cet exercice.", "error")
         return redirect(url_for('view_exercise', exercise_id=exercise_id, course_id=course_id))
     
-    # Traiter les réponses
-    answers = []
-    score = 0
-    feedback = []
-    
-    if exercise.exercise_type == 'qcm':
-        content = exercise.get_content()
-        total_questions = len(content['questions'])
-        correct_answers = 0
-        
-        for i, _ in enumerate(content['questions']):
-            answer = request.form.get(f'answer_{i}')
-            answers.append(answer)
-            
-            if answer == content['questions'][i]['options'][content['questions'][i]['correct']]:
-                correct_answers += 1
-                feedback.append({
-                    'question': i + 1,
-                    'correct': True,
-                    'message': 'Bonne réponse !'
-                })
-            else:
-                feedback.append({
-                    'question': i + 1,
-                    'correct': False,
-                    'message': f'La réponse correcte était : {content["questions"][i]["options"][content["questions"][i]["correct"]]}'
-                })
-        
-        score = (correct_answers / total_questions) * 100 if total_questions > 0 else 0
-    
-    # Enregistrer la tentative
+    # Créer une nouvelle tentative
     attempt = ExerciseAttempt(
         student_id=current_user.id,
         exercise_id=exercise_id,
-        course_id=course_id,
-        score=score,
-        answers=json.dumps(answers),
-        feedback=json.dumps(feedback),
-        completed=True
+        course_id=course_id
     )
     
+    # Traiter les réponses en fonction du type d'exercice
+    if exercise.exercise_type == 'qcm':
+        answers = {}
+        content = exercise.get_content()
+        
+        for i, _ in enumerate(content['questions']):
+            answer = request.form.get(f'answer_{i}')
+            if answer is None:
+                flash("Veuillez répondre à toutes les questions.", "error")
+                return redirect(url_for('view_exercise', exercise_id=exercise_id, course_id=course_id))
+            answers[str(i)] = int(answer)
+        
+        attempt.answers = answers
+        
+    elif exercise.exercise_type == 'fill_in_blanks':
+        answers = request.form.getlist('answers[]')
+        if not answers:
+            flash("Veuillez remplir tous les trous.", "error")
+            return redirect(url_for('view_exercise', exercise_id=exercise_id, course_id=course_id))
+            
+        content = exercise.get_content()
+        if len(answers) != len(content['answers']):
+            flash("Nombre de réponses incorrect.", "error")
+            return redirect(url_for('view_exercise', exercise_id=exercise_id, course_id=course_id))
+            
+        attempt.answers = answers
+        
+    elif exercise.exercise_type == 'word_search':
+        found_words = request.form.getlist('found_words[]')
+        attempt.answers = found_words
+        
+    elif exercise.exercise_type == 'pairs':
+        pairs = {}
+        content = exercise.get_content()
+        
+        for i, _ in enumerate(content['pairs']):
+            answer = request.form.get(f'pair_{i}')
+            if not answer:
+                flash("Veuillez associer toutes les paires.", "error")
+                return redirect(url_for('view_exercise', exercise_id=exercise_id, course_id=course_id))
+            pairs[str(i)] = answer
+            
+        attempt.answers = pairs
+        
+    elif exercise.exercise_type == 'file':
+        if 'file' not in request.files:
+            flash('Aucun fichier n\'a été envoyé.', 'error')
+            return redirect(url_for('view_exercise', exercise_id=exercise_id, course_id=course_id))
+            
+        file = request.files['file']
+        if file.filename == '':
+            flash('Aucun fichier n\'a été sélectionné.', 'error')
+            return redirect(url_for('view_exercise', exercise_id=exercise_id, course_id=course_id))
+            
+        if not allowed_file(file.filename):
+            flash('Type de fichier non autorisé.', 'error')
+            return redirect(url_for('view_exercise', exercise_id=exercise_id, course_id=course_id))
+            
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        
+        attempt.file_path = file_path
+    
+    # Sauvegarder la tentative
     db.session.add(attempt)
     db.session.commit()
     
-    flash(f'Exercice soumis avec succès ! Score : {score:.1f}%', 'success')
+    # Rediriger vers la page de l'exercice avec un message de succès
+    flash('Votre réponse a été enregistrée avec succès !', 'success')
     return redirect(url_for('view_exercise', exercise_id=exercise_id, course_id=course_id))
 
 @app.route('/exercise/<int:exercise_id>/stats')
