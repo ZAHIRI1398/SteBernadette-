@@ -435,36 +435,49 @@ def view_exercise(exercise_id):
     if current_user.is_teacher:
         if course_id:
             course = Course.query.get_or_404(course_id)
+            if course.class_obj.teacher_id != current_user.id:
+                flash("Vous n'avez pas accès à ce cours.", "error")
+                return redirect(url_for('exercise_library'))
         content = exercise.get_content()
         return render_template('view_exercise.html', 
                             exercise=exercise,
                             course=course,
                             content=content)
     
-    # Si l'utilisateur est un étudiant, vérifier qu'il a accès à l'exercice via un cours
-    if course_id:
-        course = Course.query.get_or_404(course_id)
-        if not current_user.is_enrolled(course.class_obj.id):
-            flash("Vous n'avez pas accès à cet exercice.", "error")
-            return redirect(url_for('student_classes'))
-            
-        # Vérifier que l'exercice fait partie du cours
-        if exercise not in course.exercises:
-            flash("Cet exercice ne fait pas partie du cours.", "error")
-            return redirect(url_for('view_course', course_id=course_id))
-    else:
+    # Si l'utilisateur est un étudiant
+    if not course_id:
         flash("Vous devez accéder aux exercices via vos cours.", "error")
-        return redirect(url_for('student_classes'))
+        return redirect(url_for('view_student_classes'))
+        
+    course = Course.query.get_or_404(course_id)
+    
+    # Vérifier que l'étudiant est inscrit à la classe
+    if not current_user.is_enrolled(course.class_obj.id):
+        flash("Vous n'avez pas accès à cet exercice.", "error")
+        return redirect(url_for('view_student_classes'))
+        
+    # Vérifier que l'exercice fait partie du cours
+    if exercise not in course.exercises:
+        flash("Cet exercice ne fait pas partie du cours.", "error")
+        return redirect(url_for('view_course', course_id=course_id))
     
     # Récupérer les statistiques et le contenu de l'exercice
     content = exercise.get_content()
     progress = exercise.get_student_progress(current_user.id)
     
+    # Récupérer la dernière tentative de l'étudiant pour cet exercice
+    attempt = ExerciseAttempt.query.filter_by(
+        student_id=current_user.id,
+        exercise_id=exercise_id,
+        course_id=course_id
+    ).order_by(ExerciseAttempt.created_at.desc()).first()
+    
     return render_template('view_exercise.html',
                          exercise=exercise,
                          content=content,
                          progress=progress,
-                         course=course)
+                         course=course,
+                         attempt=attempt)
 
 @app.route('/exercise/<int:exercise_id>/teacher')
 @login_required
