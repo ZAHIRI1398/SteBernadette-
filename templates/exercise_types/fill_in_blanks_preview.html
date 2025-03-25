@@ -1,6 +1,6 @@
 {% if content and content.text %}
     <div class="fill-in-blanks-container">
-        <form method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}{% if course_id %}?course_id={{ course_id }}{% endif %}">
+        <form method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="course_id" value="{{ course_id }}">
             
@@ -46,114 +46,92 @@
                         <div class="mt-4">
                             <h6>Résultats :</h6>
                             {% for answer, correct in attempt.results.items() %}
-                                <div class="alert {% if correct %}alert-success{% else %}alert-danger{% endif %} mb-2">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div>Réponse {{ loop.index }} : {{ answer }}</div>
-                                        <div>
-                                            {% if correct %}
-                                                <i class="fas fa-check text-success"></i> Correct
-                                            {% else %}
-                                                <i class="fas fa-times text-danger"></i> Incorrect
-                                            {% endif %}
-                                        </div>
-                                    </div>
+                                <div class="answer-result {% if correct %}correct{% else %}incorrect{% endif %}">
+                                    {{ answer }} - {% if correct %}✓{% else %}✗{% endif %}
                                 </div>
                             {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary">Soumettre</button>
                         </div>
                     {% endif %}
                 </div>
             </div>
-
-            {% if not attempt %}
-                <div class="text-center mt-4">
-                    <button type="submit" class="btn btn-primary btn-lg">
-                        <i class="fas fa-check"></i> Valider mes réponses
-                    </button>
-                </div>
-            {% endif %}
         </form>
     </div>
+
+    <style>
+        .fill-in-blanks-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .sentence-line {
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+        .answer-input {
+            width: 150px !important;
+            margin: 0 5px;
+        }
+        .word-bank {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .word-item {
+            background-color: #f8f9fa;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .word-item:hover {
+            background-color: #e9ecef;
+        }
+        .answer-result {
+            margin: 5px 0;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+        .answer-result.correct {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .answer-result.incorrect {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const wordItems = document.querySelectorAll('.word-item');
+            const answerInputs = document.querySelectorAll('.answer-input');
+            
+            wordItems.forEach(word => {
+                word.addEventListener('click', function() {
+                    // Trouver le premier champ vide
+                    const emptyInput = Array.from(answerInputs).find(input => !input.value && !input.disabled);
+                    if (emptyInput) {
+                        emptyInput.value = word.textContent.trim();
+                        emptyInput.focus();
+                    }
+                });
+            });
+
+            answerInputs.forEach(input => {
+                input.addEventListener('click', function() {
+                    if (!this.disabled) {
+                        this.value = '';
+                    }
+                });
+            });
+        });
+    </script>
 {% else %}
     <div class="alert alert-warning">
         Aucune phrase n'a été définie pour cet exercice.
     </div>
 {% endif %}
-
-<style>
-.fill-in-blanks-container {
-    max-width: 800px;
-    margin: 0 auto;
-}
-
-.sentence-line {
-    font-size: 1.1rem;
-    line-height: 1.6;
-}
-
-.answer-input {
-    width: 120px !important;
-    margin: 0 0.5rem;
-}
-
-.word-bank {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-}
-
-.word-item {
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 0.25rem 0.75rem;
-    cursor: pointer;
-    user-select: none;
-}
-
-.word-item:hover {
-    background-color: #e9ecef;
-}
-
-.word-item.used {
-    opacity: 0.5;
-    pointer-events: none;
-}
-</style>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const wordItems = document.querySelectorAll('.word-item');
-    const answerInputs = document.querySelectorAll('.answer-input');
-    
-    wordItems.forEach(word => {
-        word.addEventListener('click', function() {
-            // Trouver le premier champ vide
-            const emptyInput = Array.from(answerInputs).find(input => !input.value && !input.disabled);
-            if (emptyInput) {
-                emptyInput.value = this.textContent.trim();
-                this.classList.add('used');
-            }
-        });
-    });
-    
-    answerInputs.forEach(input => {
-        input.addEventListener('input', function() {
-            // Si le champ est vidé, réactiver tous les mots
-            if (!this.value) {
-                wordItems.forEach(word => word.classList.remove('used'));
-                return;
-            }
-            
-            // Vérifier si la valeur correspond à un mot de la banque
-            const matchingWord = Array.from(wordItems).find(word => 
-                word.textContent.trim().toLowerCase() === this.value.toLowerCase()
-            );
-            
-            if (matchingWord) {
-                matchingWord.classList.add('used');
-            }
-        });
-    });
-});
-</script>

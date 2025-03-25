@@ -1501,7 +1501,7 @@ def get_class_courses_api(class_id):
 @login_required
 def submit_exercise(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
-    course_id = request.args.get('course_id', type=int)
+    course_id = request.form.get('course_id', type=int)  # Récupérer depuis le formulaire au lieu de l'URL
     
     # Si l'utilisateur est un enseignant, rediriger vers la bibliothèque d'exercices
     if current_user.is_teacher:
