@@ -1568,6 +1568,12 @@ def submit_exercise(exercise_id):
             
         attempt.answers = answers
         
+        # Calculer les résultats
+        results = {}
+        for i, (student_answer, correct_answer) in enumerate(zip(answers, content['answers'])):
+            results[student_answer] = student_answer.lower().strip() == correct_answer.lower().strip()
+        attempt.results = results
+        
     elif exercise.exercise_type == 'word_search':
         found_words = request.form.getlist('found_words[]')
         attempt.answers = found_words
