@@ -1,7 +1,8 @@
 {% if content and content.text %}
     <div class="fill-in-blanks-container">
-        <form method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}">
+        <form method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}{% if course_id %}?course_id={{ course_id }}{% endif %}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="course_id" value="{{ course_id }}">
             
             <div class="card">
                 <div class="card-header">
