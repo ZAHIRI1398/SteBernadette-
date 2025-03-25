@@ -102,11 +102,13 @@
                 <label class="form-label">Texte avec trous</label>
                 <textarea class="form-control" name="text" rows="5" placeholder="Entrez le texte en utilisant [...] pour les trous. Exemple : Le [...] est un animal." required></textarea>
                 <small class="form-text text-muted">Utilisez [...] pour marquer les trous dans le texte</small>
+                <div id="preview_holes" class="mt-2"></div>
             </div>
             <div class="mb-3">
                 <label class="form-label">Réponses</label>
                 <textarea class="form-control" name="answers" rows="3" placeholder="Entrez les réponses dans l'ordre, séparées par des virgules" required></textarea>
                 <small class="form-text text-muted">Les réponses doivent être dans le même ordre que les trous</small>
+                <div id="preview_answers" class="mt-2"></div>
             </div>
         </div>
 
@@ -287,6 +289,50 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+
+    // Fonction pour mettre à jour l'aperçu des trous
+    function updateHolesPreview() {
+        const textArea = document.querySelector('#fill_in_blanks_section textarea[name="text"]');
+        const previewDiv = document.querySelector('#preview_holes');
+        if (textArea && previewDiv) {
+            const text = textArea.value;
+            const holes = text.match(/\[...\]/g);
+            previewDiv.innerHTML = holes ? 
+                `<small class="text-info">Nombre de trous trouvés : ${holes.length}</small>` :
+                '<small class="text-warning">Aucun trou trouvé. Utilisez [...] pour marquer les trous.</small>';
+        }
+    }
+
+    // Fonction pour mettre à jour l'aperçu des réponses
+    function updateAnswersPreview() {
+        const answersArea = document.querySelector('#fill_in_blanks_section textarea[name="answers"]');
+        const previewDiv = document.querySelector('#preview_answers');
+        if (answersArea && previewDiv) {
+            const answers = answersArea.value.split(',').filter(a => a.trim());
+            previewDiv.innerHTML = answers.length > 0 ?
+                `<small class="text-info">Nombre de réponses : ${answers.length}</small>` :
+                '<small class="text-warning">Aucune réponse. Entrez les réponses séparées par des virgules.</small>';
+        }
+    }
+
+    // Ajouter les écouteurs d'événements pour les aperçus
+    const fillInBlanksSection = document.querySelector('#fill_in_blanks_section');
+    if (fillInBlanksSection) {
+        const textArea = fillInBlanksSection.querySelector('textarea[name="text"]');
+        const answersArea = fillInBlanksSection.querySelector('textarea[name="answers"]');
+        
+        if (textArea) {
+            textArea.addEventListener('input', updateHolesPreview);
+            // Initialiser l'aperçu
+            updateHolesPreview();
+        }
+        
+        if (answersArea) {
+            answersArea.addEventListener('input', updateAnswersPreview);
+            // Initialiser l'aperçu
+            updateAnswersPreview();
+        }
+    }
 });
 </script>
 {% endblock %}
