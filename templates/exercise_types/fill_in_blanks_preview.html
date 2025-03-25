@@ -1,4 +1,4 @@
-{% if content and content.sentence %}
+{% if content and content.text %}
     <div class="fill-in-blanks-container">
         <form method="POST" action="{{ url_for('submit_exercise', exercise_id=exercise.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -9,10 +9,10 @@
                 </div>
                 <div class="card-body">
                     <div class="sentence-container">
-                        {% set lines = content.sentence.split('\r\n') %}
+                        {% set lines = content.text.split('\n') %}
                         {% for line in lines %}
                             <div class="sentence-line mb-3">
-                                {% set parts = line.split('___') %}
+                                {% set parts = line.split('[...]') %}
                                 {% for part in parts %}
                                     {{ part }}
                                     {% if not loop.last %}
@@ -30,11 +30,11 @@
                         {% endfor %}
                     </div>
 
-                    {% if content.words %}
+                    {% if content.answers %}
                         <div class="mt-4">
                             <h6>Mots à utiliser :</h6>
                             <div class="word-bank">
-                                {% for word in content.words %}
+                                {% for word in content.answers %}
                                     <span class="word-item">{{ word }}</span>
                                 {% endfor %}
                             </div>
@@ -102,23 +102,21 @@
 }
 
 .word-item {
-    display: inline-block;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
     padding: 0.25rem 0.75rem;
-    background-color: #e9ecef;
-    border-radius: 0.25rem;
-    margin-right: 0.5rem;
-    margin-bottom: 0.5rem;
     cursor: pointer;
-    transition: background-color 0.2s;
+    user-select: none;
 }
 
 .word-item:hover {
-    background-color: #dee2e6;
+    background-color: #e9ecef;
 }
 
 .word-item.used {
     opacity: 0.5;
-    text-decoration: line-through;
+    pointer-events: none;
 }
 </style>
 
@@ -129,12 +127,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     wordItems.forEach(word => {
         word.addEventListener('click', function() {
-            if (this.classList.contains('used')) return;
-            
             // Trouver le premier champ vide
-            const emptyInput = Array.from(answerInputs).find(input => !input.value);
+            const emptyInput = Array.from(answerInputs).find(input => !input.value && !input.disabled);
             if (emptyInput) {
-                emptyInput.value = this.textContent;
+                emptyInput.value = this.textContent.trim();
                 this.classList.add('used');
             }
         });
@@ -142,14 +138,20 @@ document.addEventListener('DOMContentLoaded', function() {
     
     answerInputs.forEach(input => {
         input.addEventListener('input', function() {
-            // Si le champ est vidé, réactiver le mot correspondant
+            // Si le champ est vidé, réactiver tous les mots
             if (!this.value) {
-                const word = Array.from(wordItems).find(w => w.classList.contains('used') && w.textContent === this.dataset.lastValue);
-                if (word) {
-                    word.classList.remove('used');
-                }
+                wordItems.forEach(word => word.classList.remove('used'));
+                return;
             }
-            this.dataset.lastValue = this.value;
+            
+            // Vérifier si la valeur correspond à un mot de la banque
+            const matchingWord = Array.from(wordItems).find(word => 
+                word.textContent.trim().toLowerCase() === this.value.toLowerCase()
+            );
+            
+            if (matchingWord) {
+                matchingWord.classList.add('used');
+            }
         });
     });
 });
